@@ -1,0 +1,2 @@
+@coinbase/smart-wallet=lib/smart-wallet
+@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts
