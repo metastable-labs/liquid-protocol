@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.12;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.12;
-
-import "./IConnector.sol";
+import "./interface/IConnector.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
@@ -16,7 +11,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  */
 abstract contract BaseConnector is IConnector, Ownable {
     /// @notice Name of the connector
-    string private immutable _name;
+    bytes32 private immutable _name;
 
     /// @notice Version of the connector
     uint256 private immutable _version;
@@ -30,7 +25,7 @@ abstract contract BaseConnector is IConnector, Ownable {
      * @param version_ Version of the connector
      */
     constructor(string memory name_, uint256 version_) {
-        _name = name_;
+        _name = keccak256(bytes(name_));
         _version = version_;
     }
 
@@ -38,15 +33,15 @@ abstract contract BaseConnector is IConnector, Ownable {
      * @notice Gets the name of the connector
      * @return string The name of the connector
      */
-    function getName() external pure override returns (string memory) {
-        return _name;
+    function getName() external view override returns (string memory) {
+        return string(abi.encodePacked(_name));
     }
 
     /**
      * @notice Gets the version of the connector
      * @return uint256 The version of the connector
      */
-    function getVersion() external pure override returns (uint256) {
+    function getVersion() external view override returns (uint256) {
         return _version;
     }
 
