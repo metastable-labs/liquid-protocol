@@ -31,19 +31,25 @@ contract ConnectorPluginTest is Test {
 
     function testExecuteUnapprovedConnector() public {
         bytes memory data = abi.encodeWithSignature("mockFunction(uint256)", 42);
-        vm.expectRevert("ConnectorPlugin: Connector not approved");
+        vm.expectRevert(
+            abi.encodeWithSelector(ConnectorPlugin.ConnectorNotApproved.selector, address(unapprovedConnector))
+        );
         plugin.execute(address(unapprovedConnector), data);
     }
 
     function testExecuteFailedConnectorCall() public {
         bytes memory data = abi.encodeWithSignature("mockFailingFunction()");
-        vm.expectRevert("ConnectorPlugin: Connector execution failed");
+        vm.expectRevert(
+            abi.encodeWithSelector(ConnectorPlugin.ConnectorExecutionFailed.selector, address(approvedConnector), data)
+        );
         plugin.execute(address(approvedConnector), data);
     }
 
     function testExecuteNonExistentFunction() public {
         bytes memory data = abi.encodeWithSignature("nonExistentFunction()");
-        vm.expectRevert("ConnectorPlugin: Connector execution failed");
+        vm.expectRevert(
+            abi.encodeWithSelector(ConnectorPlugin.ConnectorExecutionFailed.selector, address(approvedConnector), data)
+        );
         plugin.execute(address(approvedConnector), data);
     }
 
@@ -51,7 +57,6 @@ contract ConnectorPluginTest is Test {
         bytes memory data = abi.encodeWithSignature("mockFunction(uint256)", 42);
 
         vm.expectEmit(true, false, false, true);
-        // We need to emit the event here to set the expected event parameters
         emit ConnectorPlugin.ConnectorExecuted(address(approvedConnector), data, abi.encode(42));
 
         plugin.execute(address(approvedConnector), data);
@@ -60,7 +65,9 @@ contract ConnectorPluginTest is Test {
     function testExecuteWithRevertFlag() public {
         approvedConnector.setShouldRevert(true);
         bytes memory data = abi.encodeWithSignature("mockFunction(uint256)", 42);
-        vm.expectRevert("ConnectorPlugin: Connector execution failed");
+        vm.expectRevert(
+            abi.encodeWithSelector(ConnectorPlugin.ConnectorExecutionFailed.selector, address(approvedConnector), data)
+        );
         plugin.execute(address(approvedConnector), data);
     }
 }
