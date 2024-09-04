@@ -18,24 +18,28 @@ contract ConnectorPlugin {
     /// @param result The result returned by the connector
     event ConnectorExecuted(address indexed connector, bytes data, bytes result);
 
+    // Custom errors
+    error ConnectorNotApproved(address connector);
+    error ConnectorExecutionFailed(address connector, bytes data);
+
     /// @notice Constructs the ConnectorPlugin with a reference to the ConnectorRegistry
     /// @param _registry The address of the ConnectorRegistry contract
     constructor(address _registry) {
         registry = ConnectorRegistry(_registry);
     }
 
-    /// @notice Executes a call to an approved connector
-    /// @dev This function checks if the connector is approved before executing the call
-    /// @param connector The address of the connector to execute
-    /// @param data The calldata to pass to the connector
-    /// @return result The bytes returned by the connector execution
-    function execute(address connector, bytes calldata data) external payable returns (bytes memory result) {
-        require(registry.isApprovedConnector(connector), "ConnectorPlugin: Connector not approved");
+    function execute(address _connector, bytes calldata _data) external payable returns (bytes memory) {
+        uint256 latestVersion = registry.getLatestConnectorVersion(_connector);
+        if (!registry.isApprovedConnector(_connector, latestVersion)) {
+            revert ConnectorNotApproved(_connector);
+        }
 
-        bool success;
-        (success, result) = connector.call(data);
-        require(success, "ConnectorPlugin: Connector execution failed");
+        (bool success, bytes memory result) = _connector.call{value: msg.value}(_data);
+        if (!success) {
+            revert ConnectorExecutionFailed(_connector, _data);
+        }
 
-        emit ConnectorExecuted(connector, data, result);
+        emit ConnectorExecuted(_connector, _data, result);
+        return result;
     }
 }
