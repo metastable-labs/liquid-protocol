@@ -34,7 +34,7 @@ contract ConnectorRegistryTest is Test {
 
     function testAddExistingConnector() public {
         registry.addConnector(testConnector1, "TestConnector1", 1);
-        vm.expectRevert("Connector already exists");
+        vm.expectRevert(abi.encodeWithSelector(ConnectorRegistry.ConnectorAlreadyExists.selector, testConnector1));
         registry.addConnector(testConnector1, "TestConnector1", 2);
     }
 
@@ -49,7 +49,7 @@ contract ConnectorRegistryTest is Test {
     }
 
     function testUpdateNonExistentConnector() public {
-        vm.expectRevert("Connector does not exist");
+        vm.expectRevert(abi.encodeWithSelector(ConnectorRegistry.ConnectorDoesNotExist.selector, testConnector2));
         registry.updateConnector(testConnector2, "NonExistent", 1);
     }
 
@@ -65,7 +65,7 @@ contract ConnectorRegistryTest is Test {
         registry.addConnector(testConnector1, "TestConnector1", 1);
         registry.deactivateConnector(testConnector1);
 
-        vm.expectRevert("Connector is not active");
+        vm.expectRevert(abi.encodeWithSelector(ConnectorRegistry.ConnectorNotActive.selector, testConnector1));
         registry.deactivateConnector(testConnector1);
     }
 
@@ -75,15 +75,5 @@ contract ConnectorRegistryTest is Test {
 
         registry.deactivateConnector(testConnector1);
         assertFalse(registry.isApprovedConnector(testConnector1));
-    }
-
-    function testGetConnectorList() public {
-        registry.addConnector(testConnector1, "TestConnector1", 1);
-        registry.addConnector(testConnector2, "TestConnector2", 1);
-
-        address[] memory connectorList = registry.getConnectorList();
-        assertEq(connectorList.length, 2);
-        assertEq(connectorList[0], testConnector1);
-        assertEq(connectorList[1], testConnector2);
     }
 }

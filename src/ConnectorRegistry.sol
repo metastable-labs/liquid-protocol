@@ -10,6 +10,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * as well as checking the approval status of a given connector address.
  */
 contract ConnectorRegistry is Ownable(msg.sender) {
+    // Custom errors
+    error ConnectorAlreadyExists(address connector);
+    error ConnectorDoesNotExist(address connector);
+    error ConnectorNotActive(address connector);
+
     /**
      * @dev Struct to store connector information
      * @param name Name of the connector
@@ -22,7 +27,7 @@ contract ConnectorRegistry is Ownable(msg.sender) {
         bool isActive;
     }
 
-    /// @notice Mapping of connector addresses to their information
+    /// @notice Mapping of connector addresses to their information. This includes a list of active and inactive connectors
     mapping(address => Connector) public connectors;
 
     /// @notice List of all connector addresses
@@ -58,7 +63,9 @@ contract ConnectorRegistry is Ownable(msg.sender) {
      * @param _version Version of the connector
      */
     function addConnector(address _connector, string memory _name, uint256 _version) external onlyOwner {
-        require(connectors[_connector].version == 0, "Connector already exists");
+        if (connectors[_connector].version != 0) {
+            revert ConnectorAlreadyExists(_connector);
+        }
         connectors[_connector] = Connector(_name, _version, true);
         connectorList.push(_connector);
         emit ConnectorAdded(_connector, _name, _version);
@@ -72,7 +79,9 @@ contract ConnectorRegistry is Ownable(msg.sender) {
      * @param _version New version of the connector
      */
     function updateConnector(address _connector, string memory _name, uint256 _version) external onlyOwner {
-        require(connectors[_connector].version > 0, "Connector does not exist");
+        if (connectors[_connector].version == 0) {
+            revert ConnectorDoesNotExist(_connector);
+        }
         connectors[_connector] = Connector(_name, _version, true);
         emit ConnectorUpdated(_connector, _name, _version);
     }
@@ -83,7 +92,9 @@ contract ConnectorRegistry is Ownable(msg.sender) {
      * @param _connector Address of the connector to be deactivated
      */
     function deactivateConnector(address _connector) external onlyOwner {
-        require(connectors[_connector].isActive, "Connector is not active");
+        if (!connectors[_connector].isActive) {
+            revert ConnectorNotActive(_connector);
+        }
         connectors[_connector].isActive = false;
         emit ConnectorDeactivated(_connector);
     }
@@ -95,9 +106,5 @@ contract ConnectorRegistry is Ownable(msg.sender) {
      */
     function isApprovedConnector(address _connector) external view returns (bool) {
         return connectors[_connector].isActive;
-    }
-
-    function getConnectorList() public view returns (address[] memory) {
-        return connectorList;
     }
 }
