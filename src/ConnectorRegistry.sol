@@ -114,4 +114,9 @@ contract ConnectorRegistry is Ownable(msg.sender) {
     function getLatestConnectorVersion(address _connector) external view returns (uint256) {
         return latestVersion[_connector];
     }
+
+    /// @notice Returns the number of connectors in the registry
+    function getConnectorCount() public view returns (uint256) {
+        return connectorList.length;
+    }
 }
