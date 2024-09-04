@@ -58,8 +58,17 @@ contract ConnectorRegistry is Ownable(msg.sender) {
         connectors[_connector][_version] = Connector(_name, _version, true);
         latestVersion[_connector] = _version;
 
-        if (_version == 1) {
-            connectorList.push(_connector);
+        if (latestVersion[_connector] == _version) {
+            bool connectorExists = false;
+            for (uint256 i = 0; i < connectorList.length; i++) {
+                if (connectorList[i] == _connector) {
+                    connectorExists = true;
+                    break;
+                }
+            }
+            if (!connectorExists) {
+                connectorList.push(_connector);
+            }
         }
 
         emit ConnectorAdded(_connector, _name, _version);
