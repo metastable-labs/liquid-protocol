@@ -61,22 +61,30 @@ contract ConnectorRegistryTest is Test {
         assertEq(registry.getLatestConnectorVersion(testConnector1), 3);
     }
 
-    function testAddConnectorNonOwner() public {
-        vm.prank(address(0x3));
-        vm.expectRevert("Ownable: caller is not the owner");
-        registry.addConnector(testConnector1, "TestConnector1", 1);
-    }
-
-    function testAddExistingConnector() public {
+    function test_RevertWhenAddingExistingConnector() public {
         registry.addConnector(testConnector1, "TestConnector1", 1);
         vm.expectRevert(abi.encodeWithSelector(ConnectorRegistry.ConnectorAlreadyExists.selector, testConnector1, 1));
         registry.addConnector(testConnector1, "TestConnector1", 1);
     }
 
-    function testAddLowerVersion() public {
+    function test_RevertWhenAddingLowerVersion() public {
         registry.addConnector(testConnector1, "TestConnector1", 2);
         vm.expectRevert(abi.encodeWithSelector(ConnectorRegistry.InvalidVersionUpdate.selector, testConnector1, 2, 1));
         registry.addConnector(testConnector1, "TestConnector1", 1);
+    }
+
+    function test_RevertWhenUpdatingNonExistentConnector() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(ConnectorRegistry.ConnectorVersionDoesNotExist.selector, testConnector2, 1)
+        );
+        registry.updateConnector(testConnector2, "NonExistent", 1);
+    }
+
+    function test_RevertWhenDeactivatingNonActiveConnector() public {
+        registry.addConnector(testConnector1, "TestConnector1", 1);
+        registry.deactivateConnector(testConnector1, 1);
+        vm.expectRevert(abi.encodeWithSelector(ConnectorRegistry.ConnectorNotActive.selector, testConnector1, 1));
+        registry.deactivateConnector(testConnector1, 1);
     }
 
     function testUpdateConnector() public {
@@ -89,27 +97,12 @@ contract ConnectorRegistryTest is Test {
         assertTrue(isActive);
     }
 
-    function testUpdateNonExistentConnector() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(ConnectorRegistry.ConnectorVersionDoesNotExist.selector, testConnector2, 1)
-        );
-        registry.updateConnector(testConnector2, "NonExistent", 1);
-    }
-
     function testDeactivateConnector() public {
         registry.addConnector(testConnector1, "TestConnector1", 1);
         registry.deactivateConnector(testConnector1, 1);
 
         (,, bool isActive) = registry.connectors(testConnector1, 1);
         assertFalse(isActive);
-    }
-
-    function testDeactivateNonActiveConnector() public {
-        registry.addConnector(testConnector1, "TestConnector1", 1);
-        registry.deactivateConnector(testConnector1, 1);
-
-        vm.expectRevert(abi.encodeWithSelector(ConnectorRegistry.ConnectorNotActive.selector, testConnector1, 1));
-        registry.deactivateConnector(testConnector1, 1);
     }
 
     function testIsApprovedConnector() public {

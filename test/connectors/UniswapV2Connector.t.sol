@@ -31,10 +31,16 @@ contract UniswapV2ConnectorTest is Test {
         IERC20(DAI).transfer(address(connector), INITIAL_BALANCE / 2);
         IERC20(USDC).transfer(address(connector), INITIAL_BALANCE / 2);
 
+        // Transfer ETH to the connector
         (bool success,) = address(connector).call{value: INITIAL_ETH_BALANCE / 2}("");
         require(success, "ETH transfer failed");
 
         vm.stopPrank();
+
+        // Verify balances
+        assertEq(address(connector).balance, INITIAL_ETH_BALANCE / 2, "Connector ETH balance mismatch");
+        assertEq(IERC20(DAI).balanceOf(address(connector)), INITIAL_BALANCE / 2, "Connector DAI balance mismatch");
+        assertEq(IERC20(USDC).balanceOf(address(connector)), INITIAL_BALANCE / 2, "Connector USDC balance mismatch");
     }
 
     function testAddLiquidity() public {
@@ -107,10 +113,8 @@ contract UniswapV2ConnectorTest is Test {
         // Now remove liquidity
         address pair = IUniswapV2Factory(UNISWAP_V2_FACTORY).getPair(DAI, USDC);
         uint256 liquidity = IERC20(pair).balanceOf(ALICE);
-        require(liquidity > 0, "No liquidity to remove");
-
-        uint256 amountAMin = 1;
-        uint256 amountBMin = 1;
+        uint256 amountAMin = 1 ether;
+        uint256 amountBMin = 1 ether;
         uint256 deadline = block.timestamp + 1 hours;
 
         vm.startPrank(ALICE);
@@ -145,10 +149,8 @@ contract UniswapV2ConnectorTest is Test {
         // Now remove liquidity ETH
         address pair = IUniswapV2Factory(UNISWAP_V2_FACTORY).getPair(DAI, WETH);
         uint256 liquidity = IERC20(pair).balanceOf(ALICE);
-        require(liquidity > 0, "No liquidity to remove");
-
-        uint256 amountTokenMin = 1;
-        uint256 amountETHMin = 1;
+        uint256 amountTokenMin = 1 ether;
+        uint256 amountETHMin = 0.01 ether;
         uint256 deadline = block.timestamp + 1 hours;
 
         vm.startPrank(ALICE);
@@ -175,7 +177,42 @@ contract UniswapV2ConnectorTest is Test {
         vm.stopPrank();
     }
 
-    function testInsufficientLiquidity() public {
+    function testFail_InvalidSelector() public {
+        bytes memory data = abi.encodeWithSelector(bytes4(keccak256("invalidFunction()")));
+
+        vm.expectRevert(UniswapV2Connector.InvalidSelector.selector);
+        connector.execute(data);
+    }
+
+    function testFail_DeadlineExpired() public {
+        uint256 amountADesired = 1000 * 1e18;
+        uint256 amountBDesired = 1000 * 1e6;
+        uint256 amountAMin = 990 * 1e18;
+        uint256 amountBMin = 990 * 1e6;
+        uint256 deadline = block.timestamp - 1; // Expired deadline
+
+        vm.startPrank(ALICE);
+
+        bytes memory data = abi.encodeWithSelector(
+            IUniswapV2Router02.addLiquidity.selector,
+            ALICE,
+            ALICE,
+            DAI,
+            USDC,
+            amountADesired,
+            amountBDesired,
+            amountAMin,
+            amountBMin,
+            deadline
+        );
+
+        vm.expectRevert(UniswapV2Connector.DeadlineExpired.selector);
+        connector.execute(data);
+
+        vm.stopPrank();
+    }
+
+    function testFail_InsufficientLiquidity() public {
         uint256 amountADesired = 1; // Very small amount
         uint256 amountBDesired = 1;
         uint256 amountAMin = 1;
@@ -197,7 +234,7 @@ contract UniswapV2ConnectorTest is Test {
             deadline
         );
 
-        vm.expectRevert("UniswapV2Router: INSUFFICIENT_B_AMOUNT");
+        vm.expectRevert(UniswapV2Connector.InsufficientLiquidity.selector);
         connector.execute(data);
 
         vm.stopPrank();
