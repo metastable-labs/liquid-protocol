@@ -149,6 +149,12 @@ contract UniswapV2Connector is BaseConnector, Constants, UniswapV2Events {
         = abi.decode(data[4:], (address, address, address, address, uint256, uint256, uint256, uint256));
 
         if (block.timestamp > deadline) revert DeadlineExpired();
+        // Get the pair address
+        address pair = factory.getPair(tokenA, tokenB);
+        if (pair == address(0)) revert("Pair does not exist");
+
+        // Approve the router to spend the liquidity tokens
+        IERC20(pair).approve(address(router), liquidity);
 
         (amountA, amountB) =
             router.removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, msg.sender, deadline);
@@ -170,12 +176,23 @@ contract UniswapV2Connector is BaseConnector, Constants, UniswapV2Events {
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
+        // Get the pair address
+        address pair = factory.getPair(token, WETH);
+        if (pair == address(0)) revert("Pair does not exist");
+
+        // Approve the router to spend the liquidity tokens
+        IERC20(pair).approve(address(router), liquidity);
+
         (amountToken, amountETH) =
             router.removeLiquidityETH(token, liquidity, amountTokenMin, amountETHMin, msg.sender, deadline);
 
         if (amountToken < amountTokenMin || amountETH < amountETHMin) {
             revert SlippageExceeded();
         }
+
+        // Transfer ETH to the sender
+        (bool success,) = msg.sender.call{value: amountETH}("");
+        if (!success) revert ETHTransferFailed();
 
         emit LiquidityRemovedETH(token, amountToken, amountETH, liquidity);
     }
