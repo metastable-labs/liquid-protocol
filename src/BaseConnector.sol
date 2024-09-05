@@ -2,14 +2,13 @@
 pragma solidity ^0.8.12;
 
 import "./interface/IConnector.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title BaseConnector
  * @dev Abstract contract implementing basic connector functionality.
  * This contract serves as a base for specific connector implementations.
  */
-abstract contract BaseConnector is IConnector, Ownable {
+abstract contract BaseConnector is IConnector {
     /// @notice Name of the connector
     bytes32 private immutable _name;
 
