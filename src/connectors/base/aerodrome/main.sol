@@ -48,9 +48,51 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         } else if (selector == aerodromeRouter.removeLiquidity.selector) {
             (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(data, msg.sender);
             return abi.encode(amountA, amountB);
+        } else if (selector == aerodromeRouter.swapExactTokensForTokens.selector) {
+            uint256[] memory amounts = _swapExactTokensForTokens(data, msg.sender);
+            return abi.encode(amounts);
         }
 
         revert InvalidSelector();
+    }
+
+    function _swapExactTokensForTokens(bytes calldata data, address caller)
+        internal
+        returns (uint256[] memory amounts)
+    {
+        (uint256 amountIn, uint256 minReturnAmount, IRouter.Route[] memory routes, address to, uint256 deadline) =
+            abi.decode(data[4:], (uint256, uint256, IRouter.Route[], address, uint256));
+
+        if (block.timestamp > deadline) revert DeadlineExpired();
+
+        address tokenIn = routes[0].from;
+        address tokenOut = routes[routes.length - 1].to;
+
+        // Calculate expected output
+        uint256[] memory expectedAmounts = aerodromeRouter.getAmountsOut(amountIn, routes);
+        uint256 expectedAmountOut = expectedAmounts[expectedAmounts.length - 1];
+
+        // Check if the expected output meets the minimum return amount
+        if (expectedAmountOut < minReturnAmount) {
+            revert SlippageExceeded();
+        }
+
+        // Transfer tokens from caller to this contract
+        IERC20(tokenIn).transferFrom(caller, address(this), amountIn);
+
+        // Approve router to spend tokens
+        IERC20(tokenIn).approve(address(aerodromeRouter), amountIn);
+
+        // Perform the swap
+        amounts = aerodromeRouter.swapExactTokensForTokens(amountIn, minReturnAmount, routes, to, deadline);
+
+        if (amounts[amounts.length - 1] < minReturnAmount) {
+            revert SlippageExceeded();
+        }
+
+        emit Swapped(tokenIn, tokenOut, amounts[0], amounts[amounts.length - 1]);
+
+        return amounts;
     }
 
     /// @notice Deposits liquidity into an Aerodrome pool

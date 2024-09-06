@@ -11,4 +11,6 @@ contract AerodromeEvents {
     event LiquidityRemoved(
         address indexed tokenA, address indexed tokenB, uint256 amountA, uint256 amountB, uint256 liquidity
     );
+
+    event Swapped(address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut);
 }

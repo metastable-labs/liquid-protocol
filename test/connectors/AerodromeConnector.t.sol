@@ -131,6 +131,47 @@ contract AerodromeConnectorTest is Test {
         vm.stopPrank();
     }
 
+    function testSwapExactTokensForTokens() public {
+        uint256 amountIn = 1000 * 1e6; // 1,000 USDC
+        uint256 amountOutMin = 0.1 ether; // Minimum 0.1 WETH expected
+        uint256 deadline = block.timestamp + 1 hours;
+
+        vm.startPrank(ALICE);
+
+        console.log("USDC balance before: %s", IERC20(USDC).balanceOf(ALICE));
+        console.log("WETH balance before: %s", IERC20(WETH).balanceOf(ALICE));
+
+        IRouter.Route[] memory routes = new IRouter.Route[](1);
+        routes[0] = IRouter.Route({from: USDC, to: WETH, stable: false, factory: AERODROME_FACTORY});
+
+        // Calculate expected output
+        uint256[] memory expectedAmounts = IRouter(AERODROME_ROUTER).getAmountsOut(amountIn, routes);
+        uint256 expectedAmountOut = expectedAmounts[expectedAmounts.length - 1];
+
+        // Set minReturnAmount to 99% of expected output (1% slippage tolerance)
+        uint256 minReturnAmount = (expectedAmountOut * 99) / 100;
+
+        bytes memory data = abi.encodeWithSelector(
+            IRouter.swapExactTokensForTokens.selector, amountIn, minReturnAmount, routes, ALICE, deadline
+        );
+
+        bytes memory result = connector.execute(data);
+        uint256[] memory amounts = abi.decode(result, (uint256[]));
+
+        console.log("Swapped: %s USDC for %s WETH", amounts[0], amounts[amounts.length - 1]);
+
+        assertEq(amounts[0], amountIn, "Input amount should match");
+        assertGt(amounts[amounts.length - 1], amountOutMin, "Output amount should be greater than minimum");
+        assertGe(
+            amounts[amounts.length - 1], minReturnAmount, "Output amount should be greater than or equal to minimum"
+        );
+
+        console.log("USDC balance after: %s", IERC20(USDC).balanceOf(ALICE));
+        console.log("WETH balance after: %s", IERC20(WETH).balanceOf(ALICE));
+
+        vm.stopPrank();
+    }
+
     function testInvalidSelector() public {
         bytes memory data = abi.encodeWithSelector(bytes4(keccak256("invalidFunction()")));
 
