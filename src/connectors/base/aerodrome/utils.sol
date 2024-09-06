@@ -5,24 +5,34 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IRouter} from "@aerodrome/contracts/contracts/interfaces/IRouter.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IPool} from "@aerodrome/contracts/contracts/interfaces/IPool.sol";
-import {AggregatorV3Interface, IPriceFeedRegistry} from "./interface.sol";
-import {Babylonian} from "../lib/Babylonian.sol";
-import "../common/constant.sol";
+import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/IPoolFactory.sol";
 
-library AerodromeUtils is Constants {
+import {IWETH} from "./interface.sol";
+import {Babylonian} from "../../../lib/Babylonian.sol";
+
+library AerodromeUtils {
     error PriceImpactTooHigh();
     error PriceDeviationTooHigh();
 
-    function checkPriceRatio(address tokenA, address tokenB, uint256 amountA, uint256 amountB, bool stable)
-        internal
-        view
-    {
+    uint256 constant WAD = 1e18;
+    uint256 constant RAY = 1e27;
+
+    function checkPriceRatio(
+        address tokenA,
+        address tokenB,
+        uint256 amountA,
+        uint256 amountB,
+        bool stable,
+        address aerodromeRouter,
+        address aerodromeFactory,
+        uint256 liqSlippage
+    ) internal view {
         uint256 aDecMultiplier = 10 ** (18 - IERC20Metadata(tokenA).decimals());
         uint256 bDecMultiplier = 10 ** (18 - IERC20Metadata(tokenB).decimals());
 
         if (stable) {
             // Basic stable pool
-            IPool pool = IPool(IRouter(router).getPair(tokenA, tokenB, true));
+            IPool pool = IPool(IPoolFactory(aerodromeFactory).getPool(tokenA, tokenB, true));
 
             require(amountA > 0 || amountB > 0, "Invalid amounts");
 
@@ -33,8 +43,8 @@ library AerodromeUtils is Constants {
             if (amountA > 0) {
                 // divide amount by 10 to reduce price impact of theoretical swap
                 amountOut = pool.getAmountOut(amountA / 10, tokenA);
-                lowerBound = mulDiv(amountA * aDecMultiplier, 10_000 - LIQ_SLIPPAGE, 10_000);
-                upperBound = mulDiv(amountA * aDecMultiplier, 10_000 + LIQ_SLIPPAGE, 10_000);
+                lowerBound = mulDiv(amountA * aDecMultiplier, 10_000 - liqSlippage, 10_000);
+                upperBound = mulDiv(amountA * aDecMultiplier, 10_000 + liqSlippage, 10_000);
 
                 if (amountOut * bDecMultiplier * 10 < lowerBound || amountOut * bDecMultiplier * 10 > upperBound) {
                     revert PriceImpactTooHigh();
@@ -43,8 +53,8 @@ library AerodromeUtils is Constants {
                 // divide amount by 10 to reduce price impact of theoretical swap
                 amountOut = pool.getAmountOut(amountB / 10, tokenB);
 
-                lowerBound = mulDiv(amountB * bDecMultiplier, 10_000 - LIQ_SLIPPAGE, 10_000);
-                upperBound = mulDiv(amountB * bDecMultiplier, 10_000 + LIQ_SLIPPAGE, 10_000);
+                lowerBound = mulDiv(amountB * bDecMultiplier, 10_000 - liqSlippage, 10_000);
+                upperBound = mulDiv(amountB * bDecMultiplier, 10_000 + liqSlippage, 10_000);
 
                 if (amountOut * aDecMultiplier * 10 < lowerBound || amountOut * aDecMultiplier * 10 > upperBound) {
                     revert PriceImpactTooHigh();
@@ -52,7 +62,8 @@ library AerodromeUtils is Constants {
             }
         } else {
             // Basic volatile pool
-            (uint256 reserveA, uint256 reserveB) = IRouter(router).getReserves(tokenA, tokenB, false);
+            (uint256 reserveA, uint256 reserveB) =
+                IRouter(aerodromeRouter).getReserves(tokenA, tokenB, false, IRouter(aerodromeRouter).defaultFactory());
 
             // Ensure reserves are not zero to avoid division by zero
             require(reserveA > 0 && reserveB > 0, "Zero reserves");
@@ -67,19 +78,19 @@ library AerodromeUtils is Constants {
             } else if (amountA > 0) {
                 // If only amountA is provided, use getAmountOut to estimate amountB
                 uint256 estimatedAmountB =
-                    IPool(IRouter(router).getPair(tokenA, tokenB, false)).getAmountOut(amountA, tokenA);
+                    IPool(IPoolFactory(aerodromeFactory).getPool(tokenA, tokenB, false)).getAmountOut(amountA, tokenA);
                 inputRatio = mulDiv(estimatedAmountB, RAY, amountA);
             } else if (amountB > 0) {
                 // If only amountB is provided, use getAmountOut to estimate amountA
                 uint256 estimatedAmountA =
-                    IPool(IRouter(router).getPair(tokenA, tokenB, false)).getAmountOut(amountB, tokenB);
+                    IPool(IPoolFactory(aerodromeFactory).getPool(tokenA, tokenB, false)).getAmountOut(amountB, tokenB);
                 inputRatio = mulDiv(amountB, RAY, estimatedAmountA);
             } else {
                 revert("Invalid amounts");
             }
 
             // Calculate the allowed deviation
-            uint256 allowedDeviation = mulDiv(currentRatio, LIQ_SLIPPAGE, 10_000);
+            uint256 allowedDeviation = mulDiv(currentRatio, liqSlippage, 10_000);
 
             // Check if the input ratio is within the allowed deviation
             if (diff(inputRatio, currentRatio) > allowedDeviation) {
@@ -94,12 +105,13 @@ library AerodromeUtils is Constants {
         uint256 amountA,
         uint256 amountB,
         bool stable,
-        address router
+        address aerodromeRouter
     ) internal returns (uint256[] memory amounts, bool sellTokenA) {
         uint256 aDecMultiplier = 10 ** (18 - IERC20Metadata(tokenA).decimals());
         uint256 bDecMultiplier = 10 ** (18 - IERC20Metadata(tokenB).decimals());
 
-        (uint256 reserveA, uint256 reserveB) = IRouter(router).getReserves(tokenA, tokenB, stable);
+        (uint256 reserveA, uint256 reserveB) =
+            IRouter(aerodromeRouter).getReserves(tokenA, tokenB, stable, IRouter(aerodromeRouter).defaultFactory());
 
         uint256 x = reserveA;
         uint256 y = reserveB;
@@ -139,21 +151,32 @@ library AerodromeUtils is Constants {
 
         // Perform the swap
         IRouter.Route[] memory routes = new IRouter.Route[](1);
-        routes[0] = IRouter.Route(sellTokenA ? tokenA : tokenB, sellTokenA ? tokenB : tokenA, stable);
+        routes[0] = IRouter.Route(
+            sellTokenA ? tokenA : tokenB,
+            sellTokenA ? tokenB : tokenA,
+            stable,
+            IRouter(aerodromeRouter).defaultFactory()
+        );
 
-        amounts =
-            IRouter(router).swapExactTokensForTokens(tokensToSell, amountOutMin, routes, address(this), block.timestamp);
+        amounts = IRouter(aerodromeRouter).swapExactTokensForTokens(
+            tokensToSell, amountOutMin, routes, address(this), block.timestamp
+        );
 
         return (amounts, sellTokenA);
     }
 
-    function returnLeftovers(address tokenA, address tokenB, uint256 leftoverA, uint256 leftoverB, address recipient)
-        internal
-    {
+    function returnLeftovers(
+        address tokenA,
+        address tokenB,
+        uint256 leftoverA,
+        uint256 leftoverB,
+        address recipient,
+        address wethAddress
+    ) internal {
         if (leftoverA > 0) {
-            if (tokenA == WETH) {
+            if (tokenA == wethAddress) {
                 // Unwrap WETH to ETH and send
-                IWETH(WETH).withdraw(leftoverA);
+                IWETH(wethAddress).withdraw(leftoverA);
                 (bool success,) = recipient.call{value: leftoverA}("");
                 require(success, "ETH transfer failed");
             } else {
@@ -161,9 +184,9 @@ library AerodromeUtils is Constants {
             }
         }
         if (leftoverB > 0) {
-            if (tokenB == WETH) {
+            if (tokenB == wethAddress) {
                 // Unwrap WETH to ETH and send
-                IWETH(WETH).withdraw(leftoverB);
+                IWETH(wethAddress).withdraw(leftoverB);
                 (bool success,) = recipient.call{value: leftoverB}("");
                 require(success, "ETH transfer failed");
             } else {

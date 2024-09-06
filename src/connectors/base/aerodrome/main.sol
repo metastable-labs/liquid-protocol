@@ -6,9 +6,16 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IRouter} from "@aerodrome/contracts/contracts/interfaces/IRouter.sol";
 import {IPool} from "@aerodrome/contracts/contracts/interfaces/IPool.sol";
+import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/IPoolFactory.sol";
+import "../../../BaseConnector.sol";
+import "../common/constant.sol";
+import "./utils.sol";
+import "./interface.sol";
+import "./events.sol";
 
-contract AerodromeConnector is BaseConnector, Constants {
+contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     IRouter public immutable aerodromeRouter;
+    IPoolFactory public immutable aerodromeFactory;
 
     error InvalidSelector();
     error DeadlineExpired();
@@ -17,6 +24,7 @@ contract AerodromeConnector is BaseConnector, Constants {
 
     constructor(string memory name, uint256 version) BaseConnector(name, version) {
         aerodromeRouter = IRouter(AERODROME_ROUTER);
+        aerodromeFactory = IPoolFactory(AERODROME_FACTORY);
     }
 
     receive() external payable {}
@@ -54,7 +62,16 @@ contract AerodromeConnector is BaseConnector, Constants {
         if (block.timestamp > deadline) revert DeadlineExpired();
 
         // Check price ratio
-        AerodromeUtils.checkPriceRatio(tokenA, tokenB, amountADesired, amountBDesired, stable);
+        AerodromeUtils.checkPriceRatio(
+            tokenA,
+            tokenB,
+            amountADesired,
+            amountBDesired,
+            stable,
+            address(aerodromeRouter),
+            address(aerodromeFactory),
+            LIQ_SLIPPAGE
+        );
 
         // Balance token ratio before depositing
         (uint256[] memory amounts, bool sellTokenA) = AerodromeUtils.balanceTokenRatio(
@@ -89,7 +106,7 @@ contract AerodromeConnector is BaseConnector, Constants {
         uint256 leftoverA = amountADesired - amountAOut;
         uint256 leftoverB = amountBDesired - amountBOut;
 
-        AerodromeUtils.returnLeftovers(tokenA, tokenB, leftoverA, leftoverB, msg.sender);
+        AerodromeUtils.returnLeftovers(tokenA, tokenB, leftoverA, leftoverB, msg.sender, WETH_ADDRESS);
 
         emit LiquidityAdded(tokenA, tokenB, amountAOut, amountBOut, liquidity);
     }
@@ -109,7 +126,7 @@ contract AerodromeConnector is BaseConnector, Constants {
         if (block.timestamp > deadline) revert DeadlineExpired();
 
         // Get the pair address
-        address pair = aerodromeRouter.getPair(tokenA, tokenB, stable);
+        address pair = aerodromeFactory.getPool(tokenA, tokenB, stable);
         if (pair == address(0)) revert("Pair does not exist");
 
         // Approve the router to spend the liquidity tokens

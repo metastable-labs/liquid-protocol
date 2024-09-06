@@ -17,6 +17,7 @@ abstract contract Constants {
 
     // aerodrome
     address internal constant AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
+    address internal constant AERODROME_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
 
     /// @dev Liquidity slippage tolerance: 0.5%
     uint256 internal constant LIQ_SLIPPAGE = 50;
