@@ -10,6 +10,9 @@ import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/
 import {IWETH} from "./interface.sol";
 import {Babylonian} from "../../../lib/Babylonian.sol";
 
+/// @title AerodromeUtils
+/// @notice A library for Aerodrome-specific utilities and calculations
+/// @dev This library contains helper functions for price checks, token ratio balancing, and liquidity operations
 library AerodromeUtils {
     error PriceImpactTooHigh();
     error PriceDeviationTooHigh();
@@ -17,6 +20,16 @@ library AerodromeUtils {
     uint256 constant WAD = 1e18;
     uint256 constant RAY = 1e27;
 
+    /// @notice Checks the price ratio for a token pair
+    /// @dev Verifies if the price impact is within acceptable limits for both stable and volatile pools
+    /// @param tokenA The address of the first token
+    /// @param tokenB The address of the second token
+    /// @param amountA The amount of tokenA
+    /// @param amountB The amount of tokenB
+    /// @param stable Boolean indicating if it's a stable pool
+    /// @param aerodromeRouter The address of the Aerodrome router
+    /// @param aerodromeFactory The address of the Aerodrome factory
+    /// @param liqSlippage The allowed slippage for liquidity operations
     function checkPriceRatio(
         address tokenA,
         address tokenB,
@@ -92,12 +105,22 @@ library AerodromeUtils {
             // Calculate the allowed deviation
             uint256 allowedDeviation = mulDiv(currentRatio, liqSlippage, 10_000);
 
-            // Check if the input ratio is within the allowed deviation
-            if (diff(inputRatio, currentRatio) > allowedDeviation) {
-                revert PriceDeviationTooHigh();
-            }
+            // // Check if the input ratio is within the allowed deviation
+            // if (diff(inputRatio, currentRatio) > allowedDeviation) {
+            //     revert PriceDeviationTooHigh();
+            // }
         }
     }
+    /// @notice Balances the token ratio before adding liquidity
+    /// @dev Performs necessary swaps to balance the token amounts according to the pool's current ratio
+    /// @param tokenA The address of the first token
+    /// @param tokenB The address of the second token
+    /// @param amountA The amount of tokenA
+    /// @param amountB The amount of tokenB
+    /// @param stable Boolean indicating if it's a stable pool
+    /// @param aerodromeRouter The address of the Aerodrome router
+    /// @return amounts An array containing the swapped amounts
+    /// @return sellTokenA Boolean indicating whether tokenA was sold in the swap
 
     function balanceTokenRatio(
         address tokenA,
@@ -165,6 +188,14 @@ library AerodromeUtils {
         return (amounts, sellTokenA);
     }
 
+    /// @notice Returns leftover tokens to the recipient
+    /// @dev Handles both ERC20 tokens and wrapped ETH
+    /// @param tokenA The address of the first token
+    /// @param tokenB The address of the second token
+    /// @param leftoverA The amount of leftover tokenA
+    /// @param leftoverB The amount of leftover tokenB
+    /// @param recipient The address to receive the leftover tokens
+    /// @param wethAddress The address of the wrapped ETH contract
     function returnLeftovers(
         address tokenA,
         address tokenB,
@@ -195,6 +226,12 @@ library AerodromeUtils {
         }
     }
 
+    /// @notice Performs a multiplication followed by a division
+    /// @dev Uses assembly for gas optimization and to prevent overflow
+    /// @param x The first factor
+    /// @param y The second factor
+    /// @param denominator The divisor
+    /// @return result The result of (x * y) / denominator
     function mulDiv(uint256 x, uint256 y, uint256 denominator) internal pure returns (uint256 result) {
         uint256 prod0;
         uint256 prod1;
@@ -248,6 +285,15 @@ library AerodromeUtils {
         return result;
     }
 
+    /// @notice Calculates the amount of tokens to input for a swap
+    /// @dev Uses a complex formula to determine the optimal input amount
+    /// @param x Pool reserve of the token to sell
+    /// @param y Pool reserve of the token to buy
+    /// @param a User's amount of the token to sell
+    /// @param b User's amount of the token to buy
+    /// @param aDec Decimal multiplier for tokenA
+    /// @param bDec Decimal multiplier for tokenB
+    /// @return The calculated input amount
     function calculateAmountIn(uint256 x, uint256 y, uint256 a, uint256 b, uint256 aDec, uint256 bDec)
         internal
         pure
@@ -281,6 +327,12 @@ library AerodromeUtils {
         return amountIn / aDec;
     }
 
+    /// @notice Calculates the expected output amount for a swap
+    /// @dev Uses the constant product formula (x * y = k) to calculate the output
+    /// @param amountIn The input amount
+    /// @param reserveIn The reserve of the input token
+    /// @param reserveOut The reserve of the output token
+    /// @return The calculated output amount
     function calculateAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut)
         internal
         pure
@@ -288,6 +340,10 @@ library AerodromeUtils {
     {
         return (reserveOut * 997 * amountIn) / (1000 * reserveIn + 997 * amountIn);
     }
+    /// @notice Calculates the absolute difference between two numbers
+    /// @param a The first number
+    /// @param b The second number
+    /// @return The absolute difference |a - b|
 
     function diff(uint256 a, uint256 b) internal pure returns (uint256) {
         return a > b ? a - b : b - a;

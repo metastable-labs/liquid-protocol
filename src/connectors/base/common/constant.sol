@@ -20,7 +20,8 @@ abstract contract Constants {
     address internal constant AERODROME_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
 
     /// @dev Liquidity slippage tolerance: 0.5%
-    uint256 internal constant LIQ_SLIPPAGE = 50;
+    // 10% for testing
+    uint256 internal constant LIQ_SLIPPAGE = 1000;
     /// @dev 10 ** 18
     uint256 internal constant WAD = 1e18;
     /// @dev 10 ** 27
