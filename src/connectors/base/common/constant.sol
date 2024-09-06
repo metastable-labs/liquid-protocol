@@ -14,4 +14,14 @@ abstract contract Constants {
     // Uniswap V2
     address internal constant UNISWAP_V2_ROUTER = 0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24;
     address internal constant UNISWAP_V2_FACTORY = 0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6;
+
+    // aerodrome
+    address internal constant AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
+
+    /// @dev Liquidity slippage tolerance: 0.5%
+    uint256 internal constant LIQ_SLIPPAGE = 50;
+    /// @dev 10 ** 18
+    uint256 internal constant WAD = 1e18;
+    /// @dev 10 ** 27
+    uint256 internal constant RAY = 1e27;
 }
