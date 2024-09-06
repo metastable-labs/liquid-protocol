@@ -3,11 +3,11 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "forge-std/console.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IRouter} from "@aerodrome/contracts/contracts/interfaces/IRouter.sol";
 import {IPool} from "@aerodrome/contracts/contracts/interfaces/IPool.sol";
 import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/IPoolFactory.sol";
+
 import "../../../BaseConnector.sol";
 import "../common/constant.sol";
 import "./utils.sol";
@@ -77,11 +77,6 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         ) = abi.decode(data[4:], (address, address, bool, uint256, uint256, uint256, uint256, address, uint256));
 
         if (block.timestamp > deadline) revert DeadlineExpired();
-
-        console.log("Depositing liquidity:");
-        console.log("TokenA: %s, AmountA: %s", tokenA, amountADesired);
-        console.log("TokenB: %s, AmountB: %s", tokenB, amountBDesired);
-        console.log("Stable: %s, To: %s, Deadline: %s", stable, to, deadline);
 
         // Transfer tokens from msg.sender to this contract
         IERC20(tokenA).transferFrom(caller, address(this), amountADesired);
