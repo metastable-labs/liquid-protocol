@@ -1,66 +1,42 @@
-## Foundry
+## Liquid
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+## Deployments
 
-Foundry consists of:
+### If you encounter this error:
+Error: "./shell/deploy.base.sh: Permission denied"
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
-
-## Documentation
-
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
+Run this command:
 ```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
+chmod +x shell/deploy.*.sh
 ```
 
 ### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+```
+sh shell/deploy.sh --network=<NETWORK>
 ```
 
-### Cast
+where <NETWORK> can be anything between ["base", "scroll", "mode", "op"]
 
-```shell
-$ cast <subcommand>
+### Help in deployment
+```
+sh shell/deploy.sh ---help
 ```
 
-### Help
+### Adding new network
 
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
+1. Duplicate any deploy.NETWORK.sh file and name it deploy.DESIRED_NETWORK.sh
+2. Add two enviornment variables to .env and .env.example file
+```
+DESIRED_NETWORKSCAN_API_KEY=
+DESIRED_NETWORK_RPC_URL=
+```
+3. In the file `deploy.DESIRED_NETWORK.sh` file update the following variables
+```
+export ETHERSCAN_API_KEY=$DESIRED_NETWORKSCAN_API_KEY
+export RPC_URL=$DESIRED_NETWORK_RPC_URL
+```
+4. Add the network to array of `allowed_networks` in file `deploy.sh`.
+5. Run the command
+```
+sh shell/deploy.sh --network=DESIRED_NETWORK
 ```

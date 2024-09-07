@@ -1,6 +1,26 @@
 [profile.default]
+auto_detect_solc = true
 src = "src"
 out = "out"
 libs = ["lib"]
+test = "test"
+bytecode_hash = "none"
+cbor_metadata = false
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 1_000_000
+viaIR = true
+
+[etherscan]
+base-sepolia = {key = "$ETHERSCAN_API_KEY", url = "https://api-sepolia.basescan.org/api"}
+base = {key = "$BASESCAN_API_KEY", url = "https://api.basescan.org/api"}
+mainnet = {key = "$ETHERSCAN_API_KEY"}
+sepolia = {key = "$ETHERSCAN_API_KEY"}
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+[fmt]
+number_underscore = "thousands"
+
+[rpc_endpoints]
+base = "${BASE_RPC_URL}"
