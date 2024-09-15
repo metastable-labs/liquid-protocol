@@ -1,4 +1,5 @@
-## Liquid
+## Liquid Protocol
+A protocol for Liquidity and best yield aggregation.
 
 ## Deployments
 
