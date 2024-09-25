@@ -53,6 +53,11 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         } else if (selector == aerodromeRouter.swapExactTokensForTokens.selector) {
             uint256[] memory amounts = _swapExactTokensForTokens(data, msg.sender);
             return abi.encode(amounts);
+        } else if (
+            selector == IGauge.deposit.selector || selector == IGauge.withdraw.selector
+                || selector == IGauge.getReward.selector || selector == IPool.claimFees.selector
+        ) {
+            return _executeExternalCall(data);
         }
 
         revert InvalidSelector();
@@ -273,5 +278,32 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
         emit FeesWithdrawn(poolAddress);
         return new bytes(0);
+    }
+
+    /// @notice Executes an external call to a gauge or pool contract
+    /// @param data The calldata containing the function call details
+    /// @return bytes The result of the external call
+    function _executeExternalCall(bytes calldata data) internal returns (bytes memory) {
+        (address target, bytes memory callData) = abi.decode(data[4:], (address, bytes));
+
+        (bool success, bytes memory result) = target.call(callData);
+        if (!success) {
+            revert ExecutionFailed(string(result));
+        }
+
+        bytes4 selector = bytes4(callData[:4]);
+        if (selector == IGauge.deposit.selector) {
+            uint256 amount = abi.decode(callData[4:], (uint256));
+            emit LPTokenStaked(target, amount);
+        } else if (selector == IGauge.withdraw.selector) {
+            uint256 amount = abi.decode(callData[4:], (uint256));
+            emit LPTokenUnStaked(target, amount);
+        } else if (selector == IGauge.getReward.selector) {
+            emit AeroRewardsClaimed(target, address(IGauge(target).rewardToken()));
+        } else if (selector == IPool.claimFees.selector) {
+            emit FeesWithdrawn(target);
+        }
+
+        return result;
     }
 }
