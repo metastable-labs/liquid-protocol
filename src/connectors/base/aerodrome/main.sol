@@ -243,7 +243,35 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         // Withdraw LP tokens from the gauge
         gauge.withdraw(amount);
 
-        emit GaugeWithdraw(gaugeAddress, amount);
+        emit LPTokenUnStaked(gaugeAddress, amount);
         return abi.encode(amount);
+    }
+
+    /// @notice Claims rewards from a gauge
+    /// @param data The calldata containing function parameters
+    /// @return bytes The encoded result of the claim
+    function _claimGaugeRewards(bytes calldata data) internal returns (bytes memory) {
+        address gaugeAddress = abi.decode(data[4:], (address));
+        IGauge gauge = IGauge(gaugeAddress);
+
+        // Claim rewards
+        gauge.getReward();
+
+        emit AeroRewardsClaimed(gaugeAddress, address(gauge.rewardToken()));
+        return new bytes(0);
+    }
+
+    /// @notice Claims fees from a pool
+    /// @param data The calldata containing function parameters
+    /// @return bytes The encoded result of the fee claim
+    function _claimPoolFees(bytes calldata data) internal returns (bytes memory) {
+        address poolAddress = abi.decode(data[4:], (address));
+        IPool pool = IPool(poolAddress);
+
+        // Claim fees
+        pool.claimFees();
+
+        emit FeesWithdrawn(poolAddress);
+        return new bytes(0);
     }
 }

@@ -17,4 +17,8 @@ contract AerodromeEvents {
     event LPTokenStaked(address indexed guageAddress, uint256 amount);
 
     event LPTokenUnStaked(address indexed guageAddress, uint256 amount);
+
+    event AeroRewardsClaimed(address indexed guageAddress, address indexed rewardToken);
+
+    event FeesWithdrawn(address indexed poolAddress);
 }
