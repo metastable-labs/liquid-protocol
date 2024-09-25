@@ -13,4 +13,8 @@ contract AerodromeEvents {
     );
 
     event Swapped(address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut);
+
+    event LPTokenStaked(address indexed guageAddress, uint256 amount);
+
+    event LPTokenUnStaked(address indexed guageAddress, uint256 amount);
 }

@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IRouter} from "@aerodrome/contracts/contracts/interfaces/IRouter.sol";
 import {IPool} from "@aerodrome/contracts/contracts/interfaces/IPool.sol";
+import {IGuage} from "@aerodrome/contracts/contracts/interfaces/IGuage.sol";
 import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/IPoolFactory.sol";
 
 import "../../../BaseConnector.sol";
@@ -24,6 +25,7 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     error DeadlineExpired();
     error InsufficientLiquidity();
     error SlippageExceeded();
+    error UnauthorizedCaller();
 
     /// @notice Initializes the AerodromeConnector
     /// @param name Name of the connector
@@ -215,5 +217,33 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         }
 
         emit LiquidityRemoved(tokenA, tokenB, amountA, amountB, liquidity);
+    }
+
+    /// @notice Deposits LP tokens into a gauge
+    /// @param data The calldata containing function parameters
+    /// @return bytes The encoded result of the deposit
+    function _depositToGauge(bytes calldata data) internal returns (bytes memory) {
+        (address gaugeAddress, uint256 amount) = abi.decode(data[4:], (address, uint256));
+        IGauge gauge = IGauge(gaugeAddress);
+
+        // Deposit LP tokens into the gauge
+        gauge.deposit(amount);
+
+        emit LPTokenStaked(gaugeAddress, amount);
+        return abi.encode(amount);
+    }
+
+    /// @notice Withdraws LP tokens from a gauge
+    /// @param data The calldata containing function parameters
+    /// @return bytes The encoded result of the withdrawal
+    function _withdrawFromGauge(bytes calldata data) internal returns (bytes memory) {
+        (address gaugeAddress, uint256 amount) = abi.decode(data[4:], (address, uint256));
+        IGauge gauge = IGauge(gaugeAddress);
+
+        // Withdraw LP tokens from the gauge
+        gauge.withdraw(amount);
+
+        emit GaugeWithdraw(gaugeAddress, amount);
+        return abi.encode(amount);
     }
 }
