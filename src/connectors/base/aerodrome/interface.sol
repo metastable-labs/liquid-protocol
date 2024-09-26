@@ -8,6 +8,14 @@ interface IWETH {
     function withdraw(uint256 amount) external;
 }
 
+interface IGauge {
+    function deposit(uint256 _amount) external;
+    function withdraw(uint256 _amount) external;
+    function getReward(address _account) external;
+    function rewardToken() external view returns (address);
+    function balanceOf(address) external view returns (uint256);
+}
+
 /// @title Router token swapping functionality
 /// @notice Functions for swapping tokens via CL
 interface ISwapRouterV3 {

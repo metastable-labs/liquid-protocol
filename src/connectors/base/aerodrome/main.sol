@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IRouter} from "@aerodrome/contracts/contracts/interfaces/IRouter.sol";
 import {IPool} from "@aerodrome/contracts/contracts/interfaces/IPool.sol";
-import {IGuage} from "@aerodrome/contracts/contracts/interfaces/IGuage.sol";
 import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/IPoolFactory.sol";
 
 import "../../../BaseConnector.sol";
@@ -53,11 +52,10 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         } else if (selector == aerodromeRouter.swapExactTokensForTokens.selector) {
             uint256[] memory amounts = _swapExactTokensForTokens(data, msg.sender);
             return abi.encode(amounts);
-        } else if (
-            selector == IGauge.deposit.selector || selector == IGauge.withdraw.selector
-                || selector == IGauge.getReward.selector || selector == IPool.claimFees.selector
-        ) {
-            return _executeExternalCall(data);
+        } else if (selector == this.execute.selector) {
+            // This is the case for gauge and pool operations
+            (address target, bytes memory callData) = abi.decode(data[4:], (address, bytes));
+            return _executeExternalCall(abi.encode(target, callData, msg.sender));
         }
 
         revert InvalidSelector();
@@ -224,86 +222,32 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         emit LiquidityRemoved(tokenA, tokenB, amountA, amountB, liquidity);
     }
 
-    /// @notice Deposits LP tokens into a gauge
-    /// @param data The calldata containing function parameters
-    /// @return bytes The encoded result of the deposit
-    function _depositToGauge(bytes calldata data) internal returns (bytes memory) {
-        (address gaugeAddress, uint256 amount) = abi.decode(data[4:], (address, uint256));
-        IGauge gauge = IGauge(gaugeAddress);
-
-        // Deposit LP tokens into the gauge
-        gauge.deposit(amount);
-
-        emit LPTokenStaked(gaugeAddress, amount);
-        return abi.encode(amount);
-    }
-
-    /// @notice Withdraws LP tokens from a gauge
-    /// @param data The calldata containing function parameters
-    /// @return bytes The encoded result of the withdrawal
-    function _withdrawFromGauge(bytes calldata data) internal returns (bytes memory) {
-        (address gaugeAddress, uint256 amount) = abi.decode(data[4:], (address, uint256));
-        IGauge gauge = IGauge(gaugeAddress);
-
-        // Withdraw LP tokens from the gauge
-        gauge.withdraw(amount);
-
-        emit LPTokenUnStaked(gaugeAddress, amount);
-        return abi.encode(amount);
-    }
-
-    /// @notice Claims rewards from a gauge
-    /// @param data The calldata containing function parameters
-    /// @return bytes The encoded result of the claim
-    function _claimGaugeRewards(bytes calldata data) internal returns (bytes memory) {
-        address gaugeAddress = abi.decode(data[4:], (address));
-        IGauge gauge = IGauge(gaugeAddress);
-
-        // Claim rewards
-        gauge.getReward();
-
-        emit AeroRewardsClaimed(gaugeAddress, address(gauge.rewardToken()));
-        return new bytes(0);
-    }
-
-    /// @notice Claims fees from a pool
-    /// @param data The calldata containing function parameters
-    /// @return bytes The encoded result of the fee claim
-    function _claimPoolFees(bytes calldata data) internal returns (bytes memory) {
-        address poolAddress = abi.decode(data[4:], (address));
-        IPool pool = IPool(poolAddress);
-
-        // Claim fees
-        pool.claimFees();
-
-        emit FeesWithdrawn(poolAddress);
-        return new bytes(0);
-    }
-
     /// @notice Executes an external call to a gauge or pool contract
     /// @param data The calldata containing the function call details
     /// @return bytes The result of the external call
-    function _executeExternalCall(bytes calldata data) internal returns (bytes memory) {
-        (address target, bytes memory callData) = abi.decode(data[4:], (address, bytes));
-
-        (bool success, bytes memory result) = target.call(callData);
-        if (!success) {
-            revert ExecutionFailed(string(result));
-        }
+    function _executeExternalCall(bytes memory data) internal returns (bytes memory) {
+        (address target, bytes memory callData, address caller) = abi.decode(data, (address, bytes, address));
 
         bytes4 selector = bytes4(callData[:4]);
+
         if (selector == IGauge.deposit.selector) {
             uint256 amount = abi.decode(callData[4:], (uint256));
+            IGauge(target).deposit(amount);
             emit LPTokenStaked(target, amount);
         } else if (selector == IGauge.withdraw.selector) {
             uint256 amount = abi.decode(callData[4:], (uint256));
+            IGauge(target).withdraw(amount);
             emit LPTokenUnStaked(target, amount);
         } else if (selector == IGauge.getReward.selector) {
+            IGauge(target).getReward(caller);
             emit AeroRewardsClaimed(target, address(IGauge(target).rewardToken()));
         } else if (selector == IPool.claimFees.selector) {
+            IPool(target).claimFees();
             emit FeesWithdrawn(target);
+        } else {
+            revert InvalidSelector();
         }
 
-        return result;
+        return new bytes(0);
     }
 }
