@@ -9,11 +9,12 @@ interface IWETH {
 }
 
 interface IGauge {
-    function deposit(uint256 _amount) external;
+    function deposit(uint256 _amount, address _recipient) external;
     function withdraw(uint256 _amount) external;
     function getReward(address _account) external;
     function rewardToken() external view returns (address);
     function balanceOf(address) external view returns (uint256);
+    function stakingToken() external view returns (address);
 }
 
 /// @title Router token swapping functionality
