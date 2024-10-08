@@ -243,43 +243,4 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         emit LPTokenStaked(gaugeAddress, amount);
         return abi.encode(amount, msg.sender);
     }
-
-    //** commenting this out as we'll handle claiming of fees in the sdk directly */
-    // /// @notice Claims fees from a pool
-    // /// @param data The calldata containing function parameters
-    // /// @return bytes The encoded result of the fee claim
-    // function _claimPoolFees(bytes calldata data) internal returns (bytes memory) {
-    //     address poolAddress = abi.decode(data[4:], (address));
-    //     IPool pool = IPool(poolAddress);
-
-    //     // Get token addresses
-    //     address token0 = pool.token0();
-    //     address token1 = pool.token1();
-
-    //     // Get initial balances
-    //     uint256 initialBalance0 = IERC20(token0).balanceOf(address(this));
-    //     uint256 initialBalance1 = IERC20(token1).balanceOf(address(this));
-
-    //     // Claim fees
-    //     pool.claimFees();
-
-    //     // Get final balances
-    //     uint256 finalBalance0 = IERC20(token0).balanceOf(address(this));
-    //     uint256 finalBalance1 = IERC20(token1).balanceOf(address(this));
-
-    //     // Calculate claimed amounts
-    //     uint256 claimed0 = finalBalance0 > initialBalance0 ? finalBalance0 - initialBalance0 : 0;
-    //     uint256 claimed1 = finalBalance1 > initialBalance1 ? finalBalance1 - initialBalance1 : 0;
-
-    //     // Transfer claimed fees to the caller
-    //     if (claimed0 > 0) {
-    //         IERC20(token0).transfer(msg.sender, claimed0);
-    //     }
-    //     if (claimed1 > 0) {
-    //         IERC20(token1).transfer(msg.sender, claimed1);
-    //     }
-
-    //     emit FeesWithdrawn(poolAddress, token0, claimed0, token1, claimed1);
-    //     return abi.encode(claimed0, claimed1);
-    // }
 }

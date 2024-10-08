@@ -8,6 +8,8 @@ interface IWETH {
     function withdraw(uint256 amount) external;
 }
 
+/// @title LP staking functionality
+/// @notice Gauge interface for interacting with guage contract for distribution of emissions by address
 interface IGauge {
     function deposit(uint256 _amount, address _recipient) external;
     function withdraw(uint256 _amount) external;
