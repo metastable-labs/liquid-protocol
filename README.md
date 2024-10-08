@@ -19,7 +19,7 @@ A protocol for Liquidity and best yield aggregation.
    Run the following command to install the necessary dependencies:
 
    ```sh
-   forge install
+   forge update && forge install
    ```
 
 ## Deployments
