@@ -54,10 +54,7 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
             return abi.encode(amounts);
         } else if (selector == IGauge.deposit.selector) {
             return _depositToGauge(data);
-        } else if (selector == IGauge.withdraw.selector) {
-            return _withdrawFromGauge(data);
         }
-
         revert InvalidSelector();
     }
 
@@ -164,6 +161,10 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
             amountBMin = AerodromeUtils.mulDiv(amountBDesired, 10_000 - LIQ_SLIPPAGE, 10_000);
         }
 
+        // Get the pool address
+        address pool = aerodromeFactory.getPool(tokenA, tokenB, stable);
+        if (pool == address(0)) revert("Pool does not exist");
+
         // Add liquidity to the basic pool
         (amountAOut, amountBOut, liquidity) = aerodromeRouter.addLiquidity(
             tokenA, tokenB, stable, amountADesired, amountBDesired, amountAMin, amountBMin, to, deadline
@@ -222,119 +223,63 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         emit LiquidityRemoved(tokenA, tokenB, amountA, amountB, liquidity);
     }
 
-    // /// @notice Deposits LP tokens into a gauge
-    // /// @param data The calldata containing function parameters
-    // /// @return bytes The encoded result of the deposit
-    // function _depositToGauge(bytes calldata data) internal returns (bytes memory) {
-    //     (address gaugeAddress, uint256 amount) = abi.decode(data[4:], (address, uint256));
-
-    //     // Get the LP token address from the gauge
-    //     address lpToken = IGauge(gaugeAddress).stakingToken();
-
-    //     // Transfer LP tokens from the caller to this contract
-    //     IERC20(lpToken).transferFrom(msg.sender, address(this), amount);
-
-    //     // Approve the gauge to spend LP tokens
-    //     IERC20(lpToken).approve(gaugeAddress, amount);
-
-    //     bytes memory depositCalldata = abi.encodeWithSelector(IGauge.deposit.selector, amount, msg.sender);
-
-    //     // Call the gauge directly, preserving the original msg.sender
-    //     (bool success, bytes memory result) = gaugeAddress.call(depositCalldata);
-    //     if (!success) {
-    //         revert ExecutionFailed(string(result));
-    //     }
-
-    //     emit LPTokenStaked(gaugeAddress, amount);
-    //     return result;
-    // }
-
-    // /// @notice Withdraws LP tokens from a gauge
-    // /// @param data The calldata containing function parameters
-    // /// @return bytes The encoded result of the withdrawal
-    // function _withdrawFromGauge(bytes calldata data) internal returns (bytes memory) {
-    //     (address gaugeAddress, uint256 amount) = abi.decode(data[4:], (address, uint256));
-    //     IGauge gauge = IGauge(gaugeAddress);
-    //     address lpToken = gauge.stakingToken();
-
-    //     uint256 initialBalance = IERC20(lpToken).balanceOf(address(this));
-    //     uint256 stakedBalance = gauge.balanceOf(msg.sender);
-    //     uint256 toWithdraw = amount > stakedBalance ? stakedBalance : amount;
-
-    //     if (toWithdraw > 0) {
-    //         // Try to withdraw a small amount first
-    //         uint256 testAmount = 1;
-    //         try gauge.withdraw(testAmount) {
-    //             // If successful, withdraw the rest
-    //             if (toWithdraw > testAmount) {
-    //                 gauge.withdraw(toWithdraw - testAmount);
-    //             }
-    //         } catch {
-    //             // If the test withdrawal fails, try withdrawing the full amount
-    //             gauge.withdraw(toWithdraw);
-    //         }
-    //     }
-
-    //     uint256 finalBalance = IERC20(lpToken).balanceOf(address(this));
-    //     uint256 actualWithdrawn = finalBalance > initialBalance ? finalBalance - initialBalance : 0;
-
-    //     if (actualWithdrawn > 0) {
-    //         IERC20(lpToken).transfer(msg.sender, actualWithdrawn);
-    //     }
-
-    //     emit LPTokenUnStaked(gaugeAddress, actualWithdrawn, msg.sender);
-    //     return abi.encode(actualWithdrawn);
-    // }
-
-    // /// @notice Claims rewards from a gauge
-    // /// @param data The calldata containing function parameters
-    // /// @return bytes The encoded result of the claim
-    // function _claimGaugeRewards(bytes calldata data, address caller) internal returns (bytes memory) {
-    //     address gaugeAddress = abi.decode(data[4:], (address));
-    //     IGauge gauge = IGauge(gaugeAddress);
-
-    //     // Claim rewards
-    //     gauge.getReward(caller);
-
-    //     emit AeroRewardsClaimed(gaugeAddress, address(gauge.rewardToken()));
-    //     return new bytes(0);
-    // }
-
-    /// @notice Claims fees from a pool
+    /// @notice Deposits LP tokens into a gauge
     /// @param data The calldata containing function parameters
-    /// @return bytes The encoded result of the fee claim
-    function _claimPoolFees(bytes calldata data) internal returns (bytes memory) {
-        address poolAddress = abi.decode(data[4:], (address));
-        IPool pool = IPool(poolAddress);
+    /// @return bytes The encoded result of the deposit
+    function _depositToGauge(bytes calldata data) internal returns (bytes memory) {
+        (address gaugeAddress, uint256 amount) = abi.decode(data[4:], (address, uint256));
 
-        // Get token addresses
-        address token0 = pool.token0();
-        address token1 = pool.token1();
+        // Get the LP token address from the gauge
+        address lpToken = IGauge(gaugeAddress).stakingToken();
 
-        // Get initial balances
-        uint256 initialBalance0 = IERC20(token0).balanceOf(address(this));
-        uint256 initialBalance1 = IERC20(token1).balanceOf(address(this));
+        // Transfer LP tokens from the caller to this contract
+        IERC20(lpToken).transferFrom(msg.sender, address(this), amount);
 
-        // Claim fees
-        pool.claimFees();
+        // Approve the gauge to spend LP tokens
+        IERC20(lpToken).approve(gaugeAddress, amount);
 
-        // Get final balances
-        uint256 finalBalance0 = IERC20(token0).balanceOf(address(this));
-        uint256 finalBalance1 = IERC20(token1).balanceOf(address(this));
+        IGauge(gaugeAddress).deposit(amount, msg.sender);
 
-        // Calculate claimed amounts
-        uint256 claimed0 = finalBalance0 > initialBalance0 ? finalBalance0 - initialBalance0 : 0;
-        uint256 claimed1 = finalBalance1 > initialBalance1 ? finalBalance1 - initialBalance1 : 0;
-
-        // Transfer claimed fees to the caller
-        if (claimed0 > 0) {
-            IERC20(token0).transfer(msg.sender, claimed0);
-        }
-        if (claimed1 > 0) {
-            IERC20(token1).transfer(msg.sender, claimed1);
-        }
-
-        emit FeesWithdrawn(poolAddress, token0, claimed0, token1, claimed1);
-        return abi.encode(claimed0, claimed1);
+        emit LPTokenStaked(gaugeAddress, amount);
+        return abi.encode(amount, msg.sender);
     }
+
+    //** commenting this out as we'll handle claiming of fees in the sdk directly */
+    // /// @notice Claims fees from a pool
+    // /// @param data The calldata containing function parameters
+    // /// @return bytes The encoded result of the fee claim
+    // function _claimPoolFees(bytes calldata data) internal returns (bytes memory) {
+    //     address poolAddress = abi.decode(data[4:], (address));
+    //     IPool pool = IPool(poolAddress);
+
+    //     // Get token addresses
+    //     address token0 = pool.token0();
+    //     address token1 = pool.token1();
+
+    //     // Get initial balances
+    //     uint256 initialBalance0 = IERC20(token0).balanceOf(address(this));
+    //     uint256 initialBalance1 = IERC20(token1).balanceOf(address(this));
+
+    //     // Claim fees
+    //     pool.claimFees();
+
+    //     // Get final balances
+    //     uint256 finalBalance0 = IERC20(token0).balanceOf(address(this));
+    //     uint256 finalBalance1 = IERC20(token1).balanceOf(address(this));
+
+    //     // Calculate claimed amounts
+    //     uint256 claimed0 = finalBalance0 > initialBalance0 ? finalBalance0 - initialBalance0 : 0;
+    //     uint256 claimed1 = finalBalance1 > initialBalance1 ? finalBalance1 - initialBalance1 : 0;
+
+    //     // Transfer claimed fees to the caller
+    //     if (claimed0 > 0) {
+    //         IERC20(token0).transfer(msg.sender, claimed0);
+    //     }
+    //     if (claimed1 > 0) {
+    //         IERC20(token1).transfer(msg.sender, claimed1);
+    //     }
+
+    //     emit FeesWithdrawn(poolAddress, token0, claimed0, token1, claimed1);
+    //     return abi.encode(claimed0, claimed1);
+    // }
 }
