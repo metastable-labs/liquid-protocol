@@ -24,6 +24,7 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     error DeadlineExpired();
     error InsufficientLiquidity();
     error SlippageExceeded();
+    error UnauthorizedCaller();
 
     /// @notice Initializes the AerodromeConnector
     /// @param name Name of the connector
@@ -51,8 +52,9 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         } else if (selector == aerodromeRouter.swapExactTokensForTokens.selector) {
             uint256[] memory amounts = _swapExactTokensForTokens(data, msg.sender);
             return abi.encode(amounts);
+        } else if (selector == IGauge.deposit.selector) {
+            return _depositToGauge(data);
         }
-
         revert InvalidSelector();
     }
 
@@ -159,6 +161,10 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
             amountBMin = AerodromeUtils.mulDiv(amountBDesired, 10_000 - LIQ_SLIPPAGE, 10_000);
         }
 
+        // Get the pool address
+        address pool = aerodromeFactory.getPool(tokenA, tokenB, stable);
+        if (pool == address(0)) revert("Pool does not exist");
+
         // Add liquidity to the basic pool
         (amountAOut, amountBOut, liquidity) = aerodromeRouter.addLiquidity(
             tokenA, tokenB, stable, amountADesired, amountBDesired, amountAMin, amountBMin, to, deadline
@@ -215,5 +221,26 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         }
 
         emit LiquidityRemoved(tokenA, tokenB, amountA, amountB, liquidity);
+    }
+
+    /// @notice Deposits LP tokens into a gauge
+    /// @param data The calldata containing function parameters
+    /// @return bytes The encoded result of the deposit
+    function _depositToGauge(bytes calldata data) internal returns (bytes memory) {
+        (address gaugeAddress, uint256 amount) = abi.decode(data[4:], (address, uint256));
+
+        // Get the LP token address from the gauge
+        address lpToken = IGauge(gaugeAddress).stakingToken();
+
+        // Transfer LP tokens from the caller to this contract
+        IERC20(lpToken).transferFrom(msg.sender, address(this), amount);
+
+        // Approve the gauge to spend LP tokens
+        IERC20(lpToken).approve(gaugeAddress, amount);
+
+        IGauge(gaugeAddress).deposit(amount, msg.sender);
+
+        emit LPTokenStaked(gaugeAddress, amount);
+        return abi.encode(amount, msg.sender);
     }
 }

@@ -16,6 +16,11 @@ contract AerodromeConnectorTest is Test {
     address public constant AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
     address public constant AERODROME_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
     address public constant WETH = 0x4200000000000000000000000000000000000006;
+    address public constant AERO = 0x940181a94A35A4569E4529A3CDfB74e38FD98631;
+
+    // You'll need to replace these with actual addresses from the Aerodrome deployment
+    address public constant USDC_WETH_POOL = 0xcDAC0d6c6C59727a65F871236188350531885C43;
+    address public constant USDC_WETH_GAUGE = 0x519BBD1Dd8C6A94C46080E24f316c14Ee758C025;
 
     uint256 public constant INITIAL_BALANCE = 1_000_000 * 1e6; // 1 million USDC
     uint256 public constant INITIAL_ETH_BALANCE = 1000 ether;
@@ -32,6 +37,7 @@ contract AerodromeConnectorTest is Test {
         vm.startPrank(ALICE);
         IERC20(USDC).approve(address(connector), type(uint256).max);
         IERC20(WETH).approve(address(connector), type(uint256).max);
+        IERC20(USDC_WETH_POOL).approve(address(connector), type(uint256).max);
         vm.stopPrank();
 
         vm.startPrank(address(connector));
@@ -66,6 +72,10 @@ contract AerodromeConnectorTest is Test {
             deadline
         );
 
+        address pool = IPoolFactory(AERODROME_FACTORY).getPool(USDC, WETH, stable);
+
+        console.log("Liquidity balance of Alice before deposit", IERC20(pool).balanceOf(ALICE));
+
         bytes memory result = connector.execute(data);
         (uint256 amountA, uint256 amountB, uint256 liquidity) = abi.decode(result, (uint256, uint256, uint256));
 
@@ -75,8 +85,9 @@ contract AerodromeConnectorTest is Test {
         assertGt(amountB, 0, "Amount B should be greater than 0");
         assertGt(liquidity, 0, "Liquidity should be greater than 0");
 
-        console.log("USDC balance after: %s", IERC20(USDC).balanceOf(ALICE));
-        console.log("WETH balance after: %s", IERC20(WETH).balanceOf(ALICE));
+        // console.log("USDC balance after: %s", IERC20(USDC).balanceOf(ALICE));
+        // console.log("WETH balance after: %s", IERC20(WETH).balanceOf(ALICE));
+        console.log("Liquidity balance of Alice after deposit", IERC20(pool).balanceOf(ALICE));
 
         vm.stopPrank();
     }
@@ -168,6 +179,30 @@ contract AerodromeConnectorTest is Test {
 
         console.log("USDC balance after: %s", IERC20(USDC).balanceOf(ALICE));
         console.log("WETH balance after: %s", IERC20(WETH).balanceOf(ALICE));
+
+        vm.stopPrank();
+    }
+
+    function testDepositToGauge() public {
+        // First, add liquidity to get LP tokens
+        testAddLiquidity();
+
+        uint256 lpBalance = IERC20(USDC_WETH_POOL).balanceOf(ALICE);
+        require(lpBalance > 0, "No LP tokens to deposit");
+
+        uint256 depositAmount = lpBalance / 2; // Deposit half of the LP tokens
+
+        vm.startPrank(ALICE);
+
+        // Approve the AerodromeConnector to spend LP tokens
+        IERC20(USDC_WETH_POOL).approve(address(connector), depositAmount);
+
+        bytes memory data = abi.encodeWithSelector(IGauge.deposit.selector, USDC_WETH_GAUGE, depositAmount);
+
+        connector.execute(data);
+
+        assertEq(IGauge(USDC_WETH_GAUGE).balanceOf(ALICE), depositAmount, "Gauge balance should match deposit amount");
+        assertEq(IERC20(USDC_WETH_POOL).balanceOf(ALICE), lpBalance - depositAmount, "LP token balance should decrease");
 
         vm.stopPrank();
     }

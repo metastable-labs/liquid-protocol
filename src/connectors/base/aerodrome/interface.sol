@@ -8,6 +8,17 @@ interface IWETH {
     function withdraw(uint256 amount) external;
 }
 
+/// @title LP staking functionality
+/// @notice Gauge interface for interacting with gauge contract for distribution of emissions by address
+interface IGauge {
+    function deposit(uint256 _amount, address _recipient) external;
+    function withdraw(uint256 _amount) external;
+    function getReward(address _account) external;
+    function rewardToken() external view returns (address);
+    function balanceOf(address) external view returns (uint256);
+    function stakingToken() external view returns (address);
+}
+
 /// @title Router token swapping functionality
 /// @notice Functions for swapping tokens via CL
 interface ISwapRouterV3 {

@@ -13,4 +13,12 @@ contract AerodromeEvents {
     );
 
     event Swapped(address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut);
+
+    event LPTokenStaked(address indexed guageAddress, uint256 amount);
+
+    event LPTokenUnStaked(address indexed guageAddress, uint256 amount, address indexed recepient);
+
+    event AeroRewardsClaimed(address indexed guageAddress, address indexed rewardToken);
+
+    event FeesWithdrawn(address indexed poolAddress, address token0, uint256 amount0, address token1, uint256 amount1);
 }
