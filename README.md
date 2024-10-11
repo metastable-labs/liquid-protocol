@@ -73,6 +73,7 @@ sh shell/deploy.sh --network=DESIRED_NETWORK
 ```
 
 ### Deployed Addresses
+
 | Contract | Network | Address |
 |----------|---------|---------|
 | AerodromeConnector | Base | [`0xaab8909B149Dd3e0DAcd2e46E846EAe75070EF47`](https://basescan.org/address/0xaab8909B149Dd3e0DAcd2e46E846EAe75070EF47) |
