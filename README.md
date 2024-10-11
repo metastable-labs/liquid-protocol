@@ -71,3 +71,10 @@ export RPC_URL=$DESIRED_NETWORK_RPC_URL
 ```
 sh shell/deploy.sh --network=DESIRED_NETWORK
 ```
+
+### Deployed Addresses
+| Contract | Network | Address |
+|----------|---------|---------|
+| AerodromeConnector | Base | [`0xaab8909B149Dd3e0DAcd2e46E846EAe75070EF47`](https://basescan.org/address/0xaab8909B149Dd3e0DAcd2e46E846EAe75070EF47) |
+| ConnectorPlugin | Base | [`0x2f9a3fb2D6666A062148784DC04bC9273E017366`](https://basescan.org/address/0x2f9a3fb2D6666A062148784DC04bC9273E017366) |
+| ConnectorRegistry | Base | [`0x03189a1286AF104A2bfDf980B92C152B8CE3CaAd`](https://basescan.org/address/0x03189a1286AF104A2bfDf980B92C152B8CE3CaAd) |
