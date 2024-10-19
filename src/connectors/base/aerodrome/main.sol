@@ -17,9 +17,9 @@ import "./events.sol";
 contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     IRouter public immutable aerodromeRouter;
     IPoolFactory public immutable aerodromeFactory;
+    address public immutable connectorPlugin;
 
     error ExecutionFailed(string reason);
-
     error InvalidSelector();
     error DeadlineExpired();
     error InsufficientLiquidity();
@@ -29,32 +29,40 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     /// @notice Initializes the AerodromeConnector
     /// @param name Name of the connector
     /// @param version Version of the connector
-    constructor(string memory name, uint256 version) BaseConnector(name, version) {
+    /// @param _connectorPlugin Address of the authorized ConnectorPlugin
+    constructor(string memory name, uint256 version, address _connectorPlugin) BaseConnector(name, version) {
         aerodromeRouter = IRouter(AERODROME_ROUTER);
         aerodromeFactory = IPoolFactory(AERODROME_FACTORY);
+        connectorPlugin = _connectorPlugin;
     }
 
     receive() external payable {}
+
+    modifier onlyConnectorPlugin() {
+        if (msg.sender != connectorPlugin) revert UnauthorizedCaller();
+        _;
+    }
 
     /// @notice Executes a function call on the Aerodrome protocol
     /// @dev This function handles both addLiquidity and removeLiquidity operations
     /// @param data The calldata for the function call
     /// @return bytes The return data from the function call
-    function execute(bytes calldata data) external payable override returns (bytes memory) {
+    function execute(bytes calldata data) external payable override onlyConnectorPlugin returns (bytes memory) {
         bytes4 selector = bytes4(data[:4]);
+        address caller = address(bytes20(data[data.length - 20:]));
 
         if (selector == aerodromeRouter.addLiquidity.selector) {
-            (uint256 amountA, uint256 amountB, uint256 liquidity) = _depositBasicLiquidity(data, msg.sender);
+            (uint256 amountA, uint256 amountB, uint256 liquidity) =
+                _depositBasicLiquidity(data[:data.length - 20], caller);
             return abi.encode(amountA, amountB, liquidity);
         } else if (selector == aerodromeRouter.removeLiquidity.selector) {
-            (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(data, msg.sender);
+            (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(data[:data.length - 20], caller);
             return abi.encode(amountA, amountB);
         } else if (selector == aerodromeRouter.swapExactTokensForTokens.selector) {
-            uint256[] memory amounts = _swapExactTokensForTokens(data, msg.sender);
+            uint256[] memory amounts = _swapExactTokensForTokens(data[:data.length - 20], caller);
             return abi.encode(amounts);
-        } else if (selector == IGauge.deposit.selector) {
-            return _depositToGauge(data);
         }
+
         revert InvalidSelector();
     }
 
@@ -97,13 +105,6 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         return amounts;
     }
 
-    /// @notice Deposits liquidity into an Aerodrome pool
-    /// @dev Handles the process of adding liquidity, including price checks and token swaps
-    /// @param data The calldata containing function parameters
-    /// @param caller The original caller of this function
-    /// @return amountAOut The amount of tokenA actually deposited
-    /// @return amountBOut The amount of tokenB actually deposited
-    /// @return liquidity The amount of liquidity tokens received
     function _depositBasicLiquidity(bytes calldata data, address caller)
         internal
         returns (uint256 amountAOut, uint256 amountBOut, uint256 liquidity)
@@ -122,7 +123,7 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
-        // Transfer tokens from msg.sender to this contract
+        // Transfer tokens from caller to this contract
         IERC20(tokenA).transferFrom(caller, address(this), amountADesired);
         IERC20(tokenB).transferFrom(caller, address(this), amountBDesired);
 
@@ -161,10 +162,6 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
             amountBMin = AerodromeUtils.mulDiv(amountBDesired, 10_000 - LIQ_SLIPPAGE, 10_000);
         }
 
-        // Get the pool address
-        address pool = aerodromeFactory.getPool(tokenA, tokenB, stable);
-        if (pool == address(0)) revert("Pool does not exist");
-
         // Add liquidity to the basic pool
         (amountAOut, amountBOut, liquidity) = aerodromeRouter.addLiquidity(
             tokenA, tokenB, stable, amountADesired, amountBDesired, amountAMin, amountBMin, to, deadline
@@ -175,17 +172,11 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         uint256 leftoverA = amountADesired - amountAOut;
         uint256 leftoverB = amountBDesired - amountBOut;
 
-        AerodromeUtils.returnLeftovers(tokenA, tokenB, leftoverA, leftoverB, msg.sender, WETH_ADDRESS);
+        AerodromeUtils.returnLeftovers(tokenA, tokenB, leftoverA, leftoverB, caller, WETH_ADDRESS);
 
         emit LiquidityAdded(tokenA, tokenB, amountAOut, amountBOut, liquidity);
     }
 
-    /// @notice Removes liquidity from an Aerodrome pool
-    /// @dev Handles the process of removing liquidity and receiving tokens
-    /// @param data The calldata containing function parameters
-    /// @param caller The original caller of this function
-    /// @return amountA The amount of tokenA received
-    /// @return amountB The amount of tokenB received
     function _removeBasicLiquidity(bytes calldata data, address caller)
         internal
         returns (uint256 amountA, uint256 amountB)
@@ -210,7 +201,7 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         // Approve the router to spend the liquidity tokens
         IERC20(pair).approve(address(aerodromeRouter), liquidity);
 
-        // Transfer liquidity tokens from the smart wallet to this contract
+        // Transfer liquidity tokens from the caller to this contract
         IERC20(pair).transferFrom(caller, address(this), liquidity);
 
         (amountA, amountB) =
@@ -221,26 +212,5 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         }
 
         emit LiquidityRemoved(tokenA, tokenB, amountA, amountB, liquidity);
-    }
-
-    /// @notice Deposits LP tokens into a gauge
-    /// @param data The calldata containing function parameters
-    /// @return bytes The encoded result of the deposit
-    function _depositToGauge(bytes calldata data) internal returns (bytes memory) {
-        (address gaugeAddress, uint256 amount) = abi.decode(data[4:], (address, uint256));
-
-        // Get the LP token address from the gauge
-        address lpToken = IGauge(gaugeAddress).stakingToken();
-
-        // Transfer LP tokens from the caller to this contract
-        IERC20(lpToken).transferFrom(msg.sender, address(this), amount);
-
-        // Approve the gauge to spend LP tokens
-        IERC20(lpToken).approve(gaugeAddress, amount);
-
-        IGauge(gaugeAddress).deposit(amount, msg.sender);
-
-        emit LPTokenStaked(gaugeAddress, amount);
-        return abi.encode(amount, msg.sender);
     }
 }
