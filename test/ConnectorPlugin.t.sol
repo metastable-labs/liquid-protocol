@@ -17,15 +17,15 @@ contract ConnectorPluginTest is Test {
         owner = address(this);
         registry = new ConnectorRegistry();
         plugin = new ConnectorPlugin(address(registry));
-        approvedConnector = new MockConnector();
-        unapprovedConnector = new MockConnector();
+        approvedConnector = new MockConnector(address(plugin));
+        unapprovedConnector = new MockConnector(address(plugin));
 
         registry.addConnector(address(approvedConnector), "ApprovedConnector", 1);
     }
 
     function testExecuteApprovedConnector() public {
         bytes memory data = abi.encodeWithSignature("mockFunction(uint256)", 42);
-        bytes memory result = plugin.execute(address(approvedConnector), data);
+        bytes memory result = plugin.execute(address(approvedConnector), abi.encodePacked(data, address(this)));
         assertEq(abi.decode(result, (uint256)), 42);
     }
 
@@ -34,40 +34,53 @@ contract ConnectorPluginTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(ConnectorPlugin.ConnectorNotApproved.selector, address(unapprovedConnector))
         );
-        plugin.execute(address(unapprovedConnector), data);
+        plugin.execute(address(unapprovedConnector), abi.encodePacked(data, address(this)));
     }
 
     function testExecuteFailedConnectorCall() public {
         bytes memory data = abi.encodeWithSignature("mockFailingFunction()");
         vm.expectRevert(
-            abi.encodeWithSelector(ConnectorPlugin.ConnectorExecutionFailed.selector, address(approvedConnector), data)
+            abi.encodeWithSelector(
+                ConnectorPlugin.ConnectorExecutionFailed.selector,
+                address(approvedConnector),
+                abi.encodePacked(data, address(this))
+            )
         );
-        plugin.execute(address(approvedConnector), data);
+        plugin.execute(address(approvedConnector), abi.encodePacked(data, address(this)));
     }
 
     function testExecuteNonExistentFunction() public {
         bytes memory data = abi.encodeWithSignature("nonExistentFunction()");
         vm.expectRevert(
-            abi.encodeWithSelector(ConnectorPlugin.ConnectorExecutionFailed.selector, address(approvedConnector), data)
+            abi.encodeWithSelector(
+                ConnectorPlugin.ConnectorExecutionFailed.selector,
+                address(approvedConnector),
+                abi.encodePacked(data, address(this))
+            )
         );
-        plugin.execute(address(approvedConnector), data);
+        plugin.execute(address(approvedConnector), abi.encodePacked(data, address(this)));
     }
 
     function testEmitsConnectorExecutedEvent() public {
         bytes memory data = abi.encodeWithSignature("mockFunction(uint256)", 42);
+        bytes memory fullData = abi.encodePacked(data, address(this));
 
-        vm.expectEmit(true, false, false, true);
-        emit ConnectorPlugin.ConnectorExecuted(address(approvedConnector), data, abi.encode(42));
+        vm.expectEmit(true, true, false, true);
+        emit ConnectorPlugin.ConnectorExecuted(address(approvedConnector), address(this), fullData, abi.encode(42));
 
-        plugin.execute(address(approvedConnector), data);
+        plugin.execute(address(approvedConnector), fullData);
     }
 
     function testExecuteWithRevertFlag() public {
         approvedConnector.setShouldRevert(true);
         bytes memory data = abi.encodeWithSignature("mockFunction(uint256)", 42);
         vm.expectRevert(
-            abi.encodeWithSelector(ConnectorPlugin.ConnectorExecutionFailed.selector, address(approvedConnector), data)
+            abi.encodeWithSelector(
+                ConnectorPlugin.ConnectorExecutionFailed.selector,
+                address(approvedConnector),
+                abi.encodePacked(data, address(this))
+            )
         );
-        plugin.execute(address(approvedConnector), data);
+        plugin.execute(address(approvedConnector), abi.encodePacked(data, address(this)));
     }
 }
