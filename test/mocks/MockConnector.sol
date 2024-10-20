@@ -23,28 +23,28 @@ contract MockConnector {
     }
 
     function execute(bytes calldata data) external onlyConnectorPlugin returns (bytes memory) {
+        if (shouldRevert) {
+            revert("MockConnector: Intentional failure");
+        }
+
         (bytes4 selector, bytes memory params) = abi.decode(data[:4], (bytes4, bytes));
 
         if (selector == this.mockFunction.selector) {
             uint256 value = abi.decode(params, (uint256));
-            uint256 result = mockFunction(value);
-            return abi.encode(result);
+            lastValue = value;
+            return abi.encode(value);
         } else if (selector == this.mockFailingFunction.selector) {
-            mockFailingFunction();
+            revert("MockConnector: Intentional failure");
         }
 
         revert("MockConnector: Invalid function selector");
     }
 
-    function mockFunction(uint256 value) internal returns (uint256) {
-        if (shouldRevert) {
-            revert("MockConnector: Intentional failure");
-        }
-        lastValue = value;
+    function mockFunction(uint256 value) external view returns (uint256) {
         return value;
     }
 
-    function mockFailingFunction() internal pure {
+    function mockFailingFunction() external pure {
         revert("MockConnector: Intentional failure");
     }
 }

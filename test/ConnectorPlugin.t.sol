@@ -66,7 +66,7 @@ contract ConnectorPluginTest is Test {
         bytes memory fullData = abi.encodePacked(data, address(this));
 
         vm.expectEmit(true, true, false, true);
-        emit ConnectorPlugin.ConnectorExecuted(address(approvedConnector), address(this), fullData, abi.encode(42));
+        emit ConnectorPlugin.ConnectorExecuted(address(approvedConnector), address(this), data, abi.encode(42));
 
         plugin.execute(address(approvedConnector), fullData);
     }
