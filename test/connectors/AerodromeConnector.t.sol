@@ -89,11 +89,13 @@ contract AerodromeConnectorTest is Test {
             deadline
         );
 
+        bytes memory callData = abi.encodeWithSelector(AerodromeConnector.execute.selector, data);
+
         address pool = IPoolFactory(AERODROME_FACTORY).getPool(USDC, WETH, stable);
 
         console.log("Liquidity balance of Alice before deposit", IERC20(pool).balanceOf(ALICE));
 
-        bytes memory result = executeConnector(data);
+        bytes memory result = executeConnector(callData);
         (uint256 amountA, uint256 amountB, uint256 liquidity) = abi.decode(result, (uint256, uint256, uint256));
 
         console.log("Liquidity added: %s USDC, %s WETH, %s LP", amountA, amountB, liquidity);
