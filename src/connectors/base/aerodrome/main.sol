@@ -41,19 +41,26 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     /// @param data The calldata for the function call
     /// @return bytes The return data from the function call
     function execute(bytes calldata data) external payable override returns (bytes memory) {
+        // Extract the original caller (smart wallet) address from the end of the data
+        address originalCaller;
+        assembly {
+            originalCaller := calldataload(sub(calldatasize(), 20))
+        }
+
         bytes4 selector = bytes4(data[:4]);
+        bytes calldata actualData = data[:data.length - 20]; // Remove the appended address
 
         if (selector == aerodromeRouter.addLiquidity.selector) {
-            (uint256 amountA, uint256 amountB, uint256 liquidity) = _depositBasicLiquidity(data, msg.sender);
+            (uint256 amountA, uint256 amountB, uint256 liquidity) = _depositBasicLiquidity(actualData, originalCaller);
             return abi.encode(amountA, amountB, liquidity);
         } else if (selector == aerodromeRouter.removeLiquidity.selector) {
-            (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(data, msg.sender);
+            (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(actualData, originalCaller);
             return abi.encode(amountA, amountB);
         } else if (selector == aerodromeRouter.swapExactTokensForTokens.selector) {
-            uint256[] memory amounts = _swapExactTokensForTokens(data, msg.sender);
+            uint256[] memory amounts = _swapExactTokensForTokens(actualData, originalCaller);
             return abi.encode(amounts);
         } else if (selector == IGauge.deposit.selector) {
-            return _depositToGauge(data);
+            return _depositToGauge(actualData, originalCaller);
         }
         revert InvalidSelector();
     }
@@ -70,22 +77,16 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         address tokenIn = routes[0].from;
         address tokenOut = routes[routes.length - 1].to;
 
-        // Calculate expected output
         uint256[] memory expectedAmounts = aerodromeRouter.getAmountsOut(amountIn, routes);
         uint256 expectedAmountOut = expectedAmounts[expectedAmounts.length - 1];
 
-        // Check if the expected output meets the minimum return amount
         if (expectedAmountOut < minReturnAmount) {
             revert SlippageExceeded();
         }
 
-        // Transfer tokens from caller to this contract
         IERC20(tokenIn).transferFrom(caller, address(this), amountIn);
-
-        // Approve router to spend tokens
         IERC20(tokenIn).approve(address(aerodromeRouter), amountIn);
 
-        // Perform the swap
         amounts = aerodromeRouter.swapExactTokensForTokens(amountIn, minReturnAmount, routes, to, deadline);
 
         if (amounts[amounts.length - 1] < minReturnAmount) {
@@ -122,14 +123,12 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
-        // Transfer tokens from msg.sender to this contract
         IERC20(tokenA).transferFrom(caller, address(this), amountADesired);
         IERC20(tokenB).transferFrom(caller, address(this), amountBDesired);
 
         require(IERC20(tokenA).balanceOf(address(this)) >= amountADesired, "Insufficient tokenA balance");
         require(IERC20(tokenB).balanceOf(address(this)) >= amountBDesired, "Insufficient tokenB balance");
 
-        // Check price ratio
         AerodromeUtils.checkPriceRatio(
             tokenA,
             tokenB,
@@ -141,12 +140,10 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
             LIQ_SLIPPAGE
         );
 
-        // Balance token ratio before depositing
         (uint256[] memory amounts, bool sellTokenA) = AerodromeUtils.balanceTokenRatio(
             tokenA, tokenB, amountADesired, amountBDesired, stable, address(aerodromeRouter)
         );
 
-        // Update token amounts after swaps
         if (sellTokenA) {
             amountADesired -= amounts[0];
             amountBDesired += amounts[1];
@@ -155,17 +152,14 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
             amountADesired += amounts[1];
         }
 
-        // For volatile pairs: calculate minimum amount out with 0.5% slippage
         if (!stable) {
             amountAMin = AerodromeUtils.mulDiv(amountADesired, 10_000 - LIQ_SLIPPAGE, 10_000);
             amountBMin = AerodromeUtils.mulDiv(amountBDesired, 10_000 - LIQ_SLIPPAGE, 10_000);
         }
 
-        // Get the pool address
         address pool = aerodromeFactory.getPool(tokenA, tokenB, stable);
         if (pool == address(0)) revert("Pool does not exist");
 
-        // Add liquidity to the basic pool
         (amountAOut, amountBOut, liquidity) = aerodromeRouter.addLiquidity(
             tokenA, tokenB, stable, amountADesired, amountBDesired, amountAMin, amountBMin, to, deadline
         );
@@ -175,7 +169,7 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         uint256 leftoverA = amountADesired - amountAOut;
         uint256 leftoverB = amountBDesired - amountBOut;
 
-        AerodromeUtils.returnLeftovers(tokenA, tokenB, leftoverA, leftoverB, msg.sender, WETH_ADDRESS);
+        AerodromeUtils.returnLeftovers(tokenA, tokenB, leftoverA, leftoverB, caller, WETH_ADDRESS);
 
         emit LiquidityAdded(tokenA, tokenB, amountAOut, amountBOut, liquidity);
     }
@@ -203,15 +197,11 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
-        // Get the pair address
         address pair = aerodromeFactory.getPool(tokenA, tokenB, stable);
         if (pair == address(0)) revert("Pair does not exist");
 
-        // Approve the router to spend the liquidity tokens
-        IERC20(pair).approve(address(aerodromeRouter), liquidity);
-
-        // Transfer liquidity tokens from the smart wallet to this contract
         IERC20(pair).transferFrom(caller, address(this), liquidity);
+        IERC20(pair).approve(address(aerodromeRouter), liquidity);
 
         (amountA, amountB) =
             aerodromeRouter.removeLiquidity(tokenA, tokenB, stable, liquidity, amountAMin, amountBMin, to, deadline);
@@ -226,21 +216,17 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     /// @notice Deposits LP tokens into a gauge
     /// @param data The calldata containing function parameters
     /// @return bytes The encoded result of the deposit
-    function _depositToGauge(bytes calldata data) internal returns (bytes memory) {
+    function _depositToGauge(bytes calldata data, address caller) internal returns (bytes memory) {
         (address gaugeAddress, uint256 amount) = abi.decode(data[4:], (address, uint256));
 
-        // Get the LP token address from the gauge
         address lpToken = IGauge(gaugeAddress).stakingToken();
 
-        // Transfer LP tokens from the caller to this contract
-        IERC20(lpToken).transferFrom(msg.sender, address(this), amount);
-
-        // Approve the gauge to spend LP tokens
+        IERC20(lpToken).transferFrom(caller, address(this), amount);
         IERC20(lpToken).approve(gaugeAddress, amount);
 
-        IGauge(gaugeAddress).deposit(amount, msg.sender);
+        IGauge(gaugeAddress).deposit(amount, caller);
 
         emit LPTokenStaked(gaugeAddress, amount);
-        return abi.encode(amount, msg.sender);
+        return abi.encode(amount, caller);
     }
 }

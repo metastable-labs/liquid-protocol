@@ -14,9 +14,10 @@ contract ConnectorPlugin {
 
     /// @notice Emitted when a connector is successfully executed
     /// @param connector The address of the executed connector
+    /// @param caller The address of the original caller (smart wallet)
     /// @param data The calldata passed to the connector
     /// @param result The result returned by the connector
-    event ConnectorExecuted(address indexed connector, bytes data, bytes result);
+    event ConnectorExecuted(address indexed connector, address indexed caller, bytes data, bytes result);
 
     // Custom errors
     error ConnectorNotApproved(address connector);
@@ -28,18 +29,31 @@ contract ConnectorPlugin {
         registry = ConnectorRegistry(_registry);
     }
 
+    receive() external payable {}
+
     function execute(address _connector, bytes calldata _data) external payable returns (bytes memory) {
         uint256 latestVersion = registry.getLatestConnectorVersion(_connector);
         if (!registry.isApprovedConnector(_connector, latestVersion)) {
             revert ConnectorNotApproved(_connector);
         }
 
-        (bool success, bytes memory result) = _connector.call{value: msg.value}(_data);
+        // Prepare the data to be sent to the connector, including the original caller
+        bytes memory connectorData = abi.encodePacked(_data, msg.sender);
+
+        (bool success, bytes memory result) = _connector.call{value: msg.value}(connectorData);
         if (!success) {
             revert ConnectorExecutionFailed(_connector, _data);
         }
 
-        emit ConnectorExecuted(_connector, _data, result);
+        emit ConnectorExecuted(_connector, msg.sender, _data, result);
+
+        // Forward any returned ETH to the original caller
+        uint256 leftover = address(this).balance;
+        if (leftover > 0) {
+            (bool sent,) = msg.sender.call{value: leftover}("");
+            require(sent, "Failed to return leftover");
+        }
+
         return result;
     }
 }
