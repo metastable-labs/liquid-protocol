@@ -18,7 +18,6 @@ contract AerodromeConnectorTest is Test {
     address public constant WETH = 0x4200000000000000000000000000000000000006;
     address public constant AERO = 0x940181a94A35A4569E4529A3CDfB74e38FD98631;
 
-    // You'll need to replace these with actual addresses from the Aerodrome deployment
     address public constant USDC_WETH_POOL = 0xcDAC0d6c6C59727a65F871236188350531885C43;
     address public constant USDC_WETH_GAUGE = 0x519BBD1Dd8C6A94C46080E24f316c14Ee758C025;
 
@@ -76,7 +75,7 @@ contract AerodromeConnectorTest is Test {
 
         console.log("Liquidity balance of Alice before deposit", IERC20(pool).balanceOf(ALICE));
 
-        bytes memory result = connector.execute(data);
+        bytes memory result = connector.execute(abi.encodePacked(data, ALICE));
         (uint256 amountA, uint256 amountB, uint256 liquidity) = abi.decode(result, (uint256, uint256, uint256));
 
         console.log("Liquidity added: %s USDC, %s WETH, %s LP", amountA, amountB, liquidity);
@@ -85,8 +84,6 @@ contract AerodromeConnectorTest is Test {
         assertGt(amountB, 0, "Amount B should be greater than 0");
         assertGt(liquidity, 0, "Liquidity should be greater than 0");
 
-        // console.log("USDC balance after: %s", IERC20(USDC).balanceOf(ALICE));
-        // console.log("WETH balance after: %s", IERC20(WETH).balanceOf(ALICE));
         console.log("Liquidity balance of Alice after deposit", IERC20(pool).balanceOf(ALICE));
 
         vm.stopPrank();
@@ -120,20 +117,13 @@ contract AerodromeConnectorTest is Test {
             IRouter.removeLiquidity.selector, USDC, WETH, stable, liquidity, amountAMin, amountBMin, ALICE, deadline
         );
 
-        try connector.execute(data) returns (bytes memory result) {
-            (uint256 amountA, uint256 amountB) = abi.decode(result, (uint256, uint256));
+        bytes memory result = connector.execute(abi.encodePacked(data, ALICE));
+        (uint256 amountA, uint256 amountB) = abi.decode(result, (uint256, uint256));
 
-            console.log("Liquidity removed: %s USDC, %s WETH", amountA, amountB);
+        console.log("Liquidity removed: %s USDC, %s WETH", amountA, amountB);
 
-            assertGt(amountA, 0, "Amount A should be greater than 0");
-            assertGt(amountB, 0, "Amount B should be greater than 0");
-        } catch Error(string memory reason) {
-            console.log("Error: %s", reason);
-            assertTrue(false, "Remove liquidity should not revert");
-        } catch (bytes memory lowLevelData) {
-            console.logBytes(lowLevelData);
-            assertTrue(false, "Remove liquidity should not revert");
-        }
+        assertGt(amountA, 0, "Amount A should be greater than 0");
+        assertGt(amountB, 0, "Amount B should be greater than 0");
 
         console.log("LP token balance after: %s", IERC20(pair).balanceOf(ALICE));
         console.log("USDC balance after: %s", IERC20(USDC).balanceOf(ALICE));
@@ -166,7 +156,7 @@ contract AerodromeConnectorTest is Test {
             IRouter.swapExactTokensForTokens.selector, amountIn, minReturnAmount, routes, ALICE, deadline
         );
 
-        bytes memory result = connector.execute(data);
+        bytes memory result = connector.execute(abi.encodePacked(data, ALICE));
         uint256[] memory amounts = abi.decode(result, (uint256[]));
 
         console.log("Swapped: %s USDC for %s WETH", amounts[0], amounts[amounts.length - 1]);
@@ -199,7 +189,7 @@ contract AerodromeConnectorTest is Test {
 
         bytes memory data = abi.encodeWithSelector(IGauge.deposit.selector, USDC_WETH_GAUGE, depositAmount);
 
-        connector.execute(data);
+        connector.execute(abi.encodePacked(data, ALICE));
 
         assertEq(IGauge(USDC_WETH_GAUGE).balanceOf(ALICE), depositAmount, "Gauge balance should match deposit amount");
         assertEq(IERC20(USDC_WETH_POOL).balanceOf(ALICE), lpBalance - depositAmount, "LP token balance should decrease");
@@ -211,6 +201,6 @@ contract AerodromeConnectorTest is Test {
         bytes memory data = abi.encodeWithSelector(bytes4(keccak256("invalidFunction()")));
 
         vm.expectRevert(abi.encodeWithSelector(AerodromeConnector.InvalidSelector.selector));
-        connector.execute(data);
+        connector.execute(abi.encodePacked(data, ALICE));
     }
 }
