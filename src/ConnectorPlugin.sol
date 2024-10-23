@@ -47,13 +47,6 @@ contract ConnectorPlugin {
 
         emit ConnectorExecuted(_connector, msg.sender, _data, result);
 
-        // Forward any returned ETH to the original caller
-        uint256 leftover = address(this).balance;
-        if (leftover > 0) {
-            (bool sent,) = msg.sender.call{value: leftover}("");
-            require(sent, "Failed to return leftover");
-        }
-
-        return result;
+        return abi.decode(result, (bytes));
     }
 }
