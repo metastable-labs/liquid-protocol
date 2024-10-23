@@ -118,8 +118,8 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
             address tokenA,
             address tokenB,
             bool stable,
-            uint256 amountADesired,
-            uint256 amountBDesired,
+            uint256 amountAIn,
+            uint256 amountBIn,
             uint256 amountAMin,
             uint256 amountBMin,
             address to,
@@ -128,70 +128,60 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
-        if (amountADesired > 0) {
+        if (amountAIn > 0) {
             if (tokenA == WETH && msg.value > 0) {
                 IWETH(WETH).deposit{value: msg.value}();
             }
             else {
-                IERC20(tokenA).transferFrom(caller, address(this), amountADesired);
+                IERC20(tokenA).transferFrom(caller, address(this), amountAIn);
             }
         }
-        if (amountBDesired > 0) {
+        if (amountBIn > 0) {
             if (tokenB == WETH && msg.value > 0) {
                 IWETH(WETH).deposit{value: msg.value}();
             }
             else {
-                IERC20(tokenB).transferFrom(caller, address(this), amountBDesired);
+                IERC20(tokenB).transferFrom(caller, address(this), amountBIn);
             }
         }
 
+        require(IERC20(tokenA).balanceOf(address(this)) >= amountAIn, "Insufficient tokenA balance");
+        require(IERC20(tokenB).balanceOf(address(this)) >= amountBIn, "Insufficient tokenB balance");
 
-        require(IERC20(tokenA).balanceOf(address(this)) >= amountADesired, "Insufficient tokenA balance");
-        require(IERC20(tokenB).balanceOf(address(this)) >= amountBDesired, "Insufficient tokenB balance");
-
-        AerodromeUtils.checkPriceRatio(
-            tokenA,
-            tokenB,
-            amountADesired,
-            amountBDesired,
-            stable,
-            address(aerodromeRouter),
-            address(aerodromeFactory),
-            LIQ_SLIPPAGE
-        );
-
+        //TODO: price impact check
         (uint256[] memory amounts, bool sellTokenA) = AerodromeUtils.balanceTokenRatio(
-            tokenA, tokenB, amountADesired, amountBDesired, stable, address(aerodromeRouter)
+            tokenA, tokenB, amountAIn, amountBIn, stable, address(aerodromeRouter)
         );
 
         if (sellTokenA) {
-            amountADesired -= amounts[0];
-            amountBDesired += amounts[1];
+            amountAIn -= amounts[0];
+            amountBIn += amounts[1];
         } else {
-            amountBDesired -= amounts[0];
-            amountADesired += amounts[1];
+            amountBIn -= amounts[0];
+            amountAIn += amounts[1];
         }
 
         // Approve tokens to router
-        IERC20(tokenA).approve(address(aerodromeRouter), amountADesired);
-        IERC20(tokenB).approve(address(aerodromeRouter), amountBDesired);
+        IERC20(tokenA).approve(address(aerodromeRouter), amountAIn);
+        IERC20(tokenB).approve(address(aerodromeRouter), amountBIn);
 
         if (!stable) {
-            amountAMin = AerodromeUtils.mulDiv(amountADesired, 10_000 - LIQ_SLIPPAGE, 10_000);
-            amountBMin = AerodromeUtils.mulDiv(amountBDesired, 10_000 - LIQ_SLIPPAGE, 10_000);
+            amountAMin = AerodromeUtils.mulDiv(amountAIn, 10_000 - LIQ_SLIPPAGE, 10_000);
+            amountBMin = AerodromeUtils.mulDiv(amountBIn, 10_000 - LIQ_SLIPPAGE, 10_000);
         }
 
         address pool = aerodromeFactory.getPool(tokenA, tokenB, stable);
         if (pool == address(0)) revert("Pool does not exist");
 
         (amountAOut, amountBOut, liquidity) = aerodromeRouter.addLiquidity(
-            tokenA, tokenB, stable, amountADesired, amountBDesired, amountAMin, amountBMin, to, deadline
+            tokenA, tokenB, stable, amountAIn, amountBIn, amountAMin, amountBMin, to, deadline
         );
 
         if (liquidity == 0) revert InsufficientLiquidity();
+        //TODO: valueOut VS valueIn check using TWAP price
 
-        uint256 leftoverA = amountADesired - amountAOut;
-        uint256 leftoverB = amountBDesired - amountBOut;
+        uint256 leftoverA = amountAIn - amountAOut;
+        uint256 leftoverB = amountBIn - amountBOut;
 
         AerodromeUtils.returnLeftovers(tokenA, tokenB, leftoverA, leftoverB, caller, WETH);
 
@@ -229,10 +219,6 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
         (amountA, amountB) =
             aerodromeRouter.removeLiquidity(tokenA, tokenB, stable, liquidity, amountAMin, amountBMin, to, deadline);
-
-        if (amountA < amountAMin || amountB < amountBMin) {
-            revert SlippageExceeded();
-        }
 
         emit LiquidityRemoved(tokenA, tokenB, amountA, amountB, liquidity);
     }
