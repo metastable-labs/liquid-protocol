@@ -20,26 +20,20 @@ contract MockConnector {
         ethToReturn = _ethToReturn;
     }
 
-    function mockFunction(uint256 value) external payable returns (uint256, address) {
+    function mockFunction(uint256 value) external payable returns (uint256) {
         if (shouldRevert) {
             revert("MockConnector: Intentional failure");
         }
 
-        // Extract the original caller from the end of the calldata
-        address originalCaller;
-        assembly {
-            originalCaller := calldataload(sub(calldatasize(), 20))
-        }
 
         lastValue = value;
-        lastCaller = originalCaller;
 
         // Return ETH if set
         if (ethToReturn > 0) {
             payable(address(this)).transfer(ethToReturn);
         }
 
-        return (value, originalCaller);
+        return value;
     }
 
     function mockFailingFunction() external pure {

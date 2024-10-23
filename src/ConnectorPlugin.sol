@@ -38,7 +38,7 @@ contract ConnectorPlugin {
         }
 
         // Prepare the data to be sent to the connector, including the original caller
-        bytes memory connectorData = abi.encodePacked(_data, msg.sender);
+        bytes memory connectorData = abi.encodeWithSignature("execute(bytes,address)", _data, msg.sender);
 
         (bool success, bytes memory result) = _connector.call{value: msg.value}(connectorData);
         if (!success) {

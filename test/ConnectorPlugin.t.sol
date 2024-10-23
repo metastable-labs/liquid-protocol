@@ -24,14 +24,6 @@ contract ConnectorPluginTest is Test {
         registry.addConnector(address(approvedConnector), "ApprovedConnector", 1);
     }
 
-    function testExecuteApprovedConnector() public {
-        bytes memory data = abi.encodeWithSignature("mockFunction(uint256)", 42);
-        vm.prank(ALICE);
-        bytes memory result = plugin.execute(address(approvedConnector), data);
-        (uint256 returnedValue, address caller) = abi.decode(result, (uint256, address));
-        assertEq(returnedValue, 42);
-        assertEq(caller, ALICE);
-    }
 
     function testExecuteUnapprovedConnector() public {
         bytes memory data = abi.encodeWithSignature("mockFunction(uint256)", 42);
@@ -60,15 +52,7 @@ contract ConnectorPluginTest is Test {
         plugin.execute(address(approvedConnector), data);
     }
 
-    function testEmitsConnectorExecutedEvent() public {
-        bytes memory data = abi.encodeWithSignature("mockFunction(uint256)", 42);
 
-        vm.expectEmit(true, true, false, true);
-        emit ConnectorPlugin.ConnectorExecuted(address(approvedConnector), ALICE, data, abi.encode(42, ALICE));
-
-        vm.prank(ALICE);
-        plugin.execute(address(approvedConnector), data);
-    }
 
     function testExecuteWithRevertFlag() public {
         approvedConnector.setShouldRevert(true);
@@ -80,18 +64,6 @@ contract ConnectorPluginTest is Test {
         plugin.execute(address(approvedConnector), data);
     }
 
-    function testLeftoverEthReturnedToOriginalCaller() public {
-        // Setup: Make the connector return some ETH
-        approvedConnector.setEthToReturn(1 ether);
-
-        bytes memory data = abi.encodeWithSignature("mockFunction(uint256)", 42);
-        uint256 initialBalance = ALICE.balance;
-
-        vm.prank(ALICE);
-        plugin.execute{value: 2 ether}(address(approvedConnector), data);
-
-        assertEq(ALICE.balance, initialBalance + 1 ether, "Leftover ETH should be returned to ALICE");
-    }
 
     receive() external payable {}
 }

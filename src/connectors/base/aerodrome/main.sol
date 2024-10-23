@@ -29,38 +29,38 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     /// @notice Initializes the AerodromeConnector
     /// @param name Name of the connector
     /// @param version Version of the connector
-    constructor(string memory name, uint256 version) BaseConnector(name, version) {
+    constructor(string memory name, uint256 version, address plugin) BaseConnector(name, version, plugin) {
         aerodromeRouter = IRouter(AERODROME_ROUTER);
         aerodromeFactory = IPoolFactory(AERODROME_FACTORY);
     }
 
     receive() external payable {}
 
+    function execute(bytes calldata data) external payable override returns (bytes memory) {
+        return execute(data, msg.sender);
+    } 
+
     /// @notice Executes a function call on the Aerodrome protocol
     /// @dev This function handles both addLiquidity and removeLiquidity operations
     /// @param data The calldata for the function call
     /// @return bytes The return data from the function call
-    function execute(bytes calldata data) external payable override returns (bytes memory) {
+    function execute(bytes calldata data, address caller) public payable returns (bytes memory) {
         // Extract the original caller (smart wallet) address from the end of the data
-        address originalCaller;
-        assembly {
-            originalCaller := calldataload(sub(calldatasize(), 20))
-        }
-
+        address originalCaller = msg.sender == _plugin ? caller : msg.sender;
+        
         bytes4 selector = bytes4(data[:4]);
-        bytes calldata actualData = data[:data.length - 20]; // Remove the appended address
 
         if (selector == aerodromeRouter.addLiquidity.selector) {
-            (uint256 amountA, uint256 amountB, uint256 liquidity) = _depositBasicLiquidity(actualData, originalCaller);
+            (uint256 amountA, uint256 amountB, uint256 liquidity) = _depositBasicLiquidity(data, originalCaller);
             return abi.encode(amountA, amountB, liquidity);
         } else if (selector == aerodromeRouter.removeLiquidity.selector) {
-            (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(actualData, originalCaller);
+            (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(data, originalCaller);
             return abi.encode(amountA, amountB);
         } else if (selector == aerodromeRouter.swapExactTokensForTokens.selector) {
-            uint256[] memory amounts = _swapExactTokensForTokens(actualData, originalCaller);
+            uint256[] memory amounts = _swapExactTokensForTokens(data, originalCaller);
             return abi.encode(amounts);
         } else if (selector == IGauge.deposit.selector) {
-            return _depositToGauge(actualData, originalCaller);
+            return _depositToGauge(data, originalCaller);
         }
         revert InvalidSelector();
     }
