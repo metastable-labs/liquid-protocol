@@ -75,6 +75,14 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         if (block.timestamp > deadline) revert DeadlineExpired();
 
         address tokenIn = routes[0].from;
+        if (tokenIn == WETH && msg.value > 0) {
+            IWETH(WETH).deposit{value: msg.value}();
+        }
+        else {
+            IERC20(tokenIn).transferFrom(caller, address(this), amountIn);
+        }
+        IERC20(tokenIn).approve(address(aerodromeRouter), amountIn);
+
         address tokenOut = routes[routes.length - 1].to;
 
         uint256[] memory expectedAmounts = aerodromeRouter.getAmountsOut(amountIn, routes);
@@ -83,9 +91,6 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         if (expectedAmountOut < minReturnAmount) {
             revert SlippageExceeded();
         }
-
-        IERC20(tokenIn).transferFrom(caller, address(this), amountIn);
-        IERC20(tokenIn).approve(address(aerodromeRouter), amountIn);
 
         amounts = aerodromeRouter.swapExactTokensForTokens(amountIn, minReturnAmount, routes, to, deadline);
 
@@ -123,8 +128,23 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
-        IERC20(tokenA).transferFrom(caller, address(this), amountADesired);
-        IERC20(tokenB).transferFrom(caller, address(this), amountBDesired);
+        if (amountADesired > 0) {
+            if (tokenA == WETH && msg.value > 0) {
+                IWETH(WETH).deposit{value: msg.value}();
+            }
+            else {
+                IERC20(tokenA).transferFrom(caller, address(this), amountADesired);
+            }
+        }
+        if (amountBDesired > 0) {
+            if (tokenB == WETH && msg.value > 0) {
+                IWETH(WETH).deposit{value: msg.value}();
+            }
+            else {
+                IERC20(tokenB).transferFrom(caller, address(this), amountBDesired);
+            }
+        }
+
 
         require(IERC20(tokenA).balanceOf(address(this)) >= amountADesired, "Insufficient tokenA balance");
         require(IERC20(tokenB).balanceOf(address(this)) >= amountBDesired, "Insufficient tokenB balance");
@@ -152,6 +172,10 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
             amountADesired += amounts[1];
         }
 
+        // Approve tokens to router
+        IERC20(tokenA).approve(address(aerodromeRouter), amountADesired);
+        IERC20(tokenB).approve(address(aerodromeRouter), amountBDesired);
+
         if (!stable) {
             amountAMin = AerodromeUtils.mulDiv(amountADesired, 10_000 - LIQ_SLIPPAGE, 10_000);
             amountBMin = AerodromeUtils.mulDiv(amountBDesired, 10_000 - LIQ_SLIPPAGE, 10_000);
@@ -169,7 +193,7 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         uint256 leftoverA = amountADesired - amountAOut;
         uint256 leftoverB = amountBDesired - amountBOut;
 
-        AerodromeUtils.returnLeftovers(tokenA, tokenB, leftoverA, leftoverB, caller, WETH_ADDRESS);
+        AerodromeUtils.returnLeftovers(tokenA, tokenB, leftoverA, leftoverB, caller, WETH);
 
         emit LiquidityAdded(tokenA, tokenB, amountAOut, amountBOut, liquidity);
     }

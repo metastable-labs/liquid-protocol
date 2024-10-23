@@ -9,7 +9,7 @@ abstract contract Constants {
     address internal constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     // Wrapped Ether
-    address internal constant WETH_ADDRESS = 0x4200000000000000000000000000000000000006;
+    address internal constant WETH = 0x4200000000000000000000000000000000000006;
 
     // Uniswap V2
     address internal constant UNISWAP_V2_ROUTER = 0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24;

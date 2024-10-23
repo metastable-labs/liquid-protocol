@@ -39,7 +39,7 @@ contract Integration is Test {
         connector = new AerodromeConnector("AerodromeConnector", 1, address(plugin));
         registry.addConnector(address(connector), "AerodromeConnector", 1);
 
-
+        deal(ALICE, INITIAL_ETH_BALANCE);
         deal(USDC, ALICE, INITIAL_BALANCE);
         deal(WETH, ALICE, INITIAL_ETH_BALANCE);
 
@@ -86,6 +86,49 @@ contract Integration is Test {
         console.log("Liquidity balance of Alice before deposit: %e", IERC20(pool).balanceOf(ALICE));
 
         bytes memory result = plugin.execute(address(connector), data);
+        (uint256 amountA, uint256 amountB, uint256 liquidity) = abi.decode(result, (uint256, uint256, uint256));
+
+        console.log("Liquidity added: %e USDC, %e WETH", amountA, amountB);
+
+        assertGt(amountA, 0, "Amount A should be greater than 0");
+        assertGt(amountB, 0, "Amount B should be greater than 0");
+        assertGt(liquidity, 0, "Liquidity should be greater than 0");
+
+        // console.log("USDC balance after: %s", IERC20(USDC).balanceOf(ALICE));
+        // console.log("WETH balance after: %s", IERC20(WETH).balanceOf(ALICE));
+        console.log("Liquidity balance of Alice after deposit: %e", IERC20(pool).balanceOf(ALICE));
+
+        vm.stopPrank();
+    }
+
+    function test_plugin_addLiquidityETH() public {
+        uint256 amountADesired = 1000 * 1e6; // 1,000 USDC
+        uint256 amountBDesired = 1 ether; // 1 WETH
+        uint256 amountAMin = 900 * 1e6;
+        uint256 amountBMin = 0.9 ether;
+        bool stable = false;
+        uint256 deadline = block.timestamp + 1 hours;
+
+        vm.startPrank(ALICE);
+
+        bytes memory data = abi.encodeWithSelector(
+            IRouter.addLiquidity.selector,
+            USDC,
+            WETH,
+            stable,
+            amountADesired,
+            amountBDesired,
+            amountAMin,
+            amountBMin,
+            ALICE,
+            deadline
+        );
+
+        address pool = IPoolFactory(AERODROME_FACTORY).getPool(USDC, WETH, stable);
+
+        console.log("Liquidity balance of Alice before deposit: %e", IERC20(pool).balanceOf(ALICE));
+
+        bytes memory result = plugin.execute{value: amountBDesired}(address(connector), data);
         (uint256 amountA, uint256 amountB, uint256 liquidity) = abi.decode(result, (uint256, uint256, uint256));
 
         console.log("Liquidity added: %e USDC, %e WETH", amountA, amountB);
@@ -164,10 +207,8 @@ contract Integration is Test {
 
         bytes memory result = plugin.execute(address(connector), data);
 
-        console.log("HI");
         console.logBytes(result);
         uint256[] memory amounts = abi.decode(result, (uint256[]));
-        console.log("NOT HERE");
 
         console.log("Swapped: %s USDC for %s WETH", amounts[0], amounts[amounts.length - 1]);
 
@@ -179,6 +220,44 @@ contract Integration is Test {
 
         console.log("USDC balance after: %s", IERC20(USDC).balanceOf(ALICE));
         console.log("WETH balance after: %s", IERC20(WETH).balanceOf(ALICE));
+
+        vm.stopPrank();
+    }
+
+    function test_plugin_SwapExactTokensForTokens_ETH() public {
+        uint256 amountIn = INITIAL_ETH_BALANCE;
+        uint256 amountOutMin = 0;
+        uint256 deadline = block.timestamp + 1 hours;
+
+        vm.startPrank(ALICE);
+
+
+        IRouter.Route[] memory routes = new IRouter.Route[](1);
+        routes[0] = IRouter.Route({from: WETH, to: USDC, stable: false, factory: AERODROME_FACTORY});
+
+        // Calculate expected output
+        uint256[] memory expectedAmounts = IRouter(AERODROME_ROUTER).getAmountsOut(amountIn, routes);
+        uint256 expectedAmountOut = expectedAmounts[expectedAmounts.length - 1];
+
+        // Set minReturnAmount to 99% of expected output (1% slippage tolerance)
+        uint256 minReturnAmount = (expectedAmountOut * 99) / 100;
+
+        bytes memory data = abi.encodeWithSelector(
+            IRouter.swapExactTokensForTokens.selector, amountIn, minReturnAmount, routes, ALICE, deadline
+        );
+
+        bytes memory result = plugin.execute{value: amountIn}(address(connector), data);
+
+        console.logBytes(result);
+        uint256[] memory amounts = abi.decode(result, (uint256[]));
+
+        console.log("Swapped: %e WETH for %e USDC", amounts[0], amounts[amounts.length - 1]);
+
+        assertEq(amounts[0], amountIn, "Input amount should match");
+        assertGt(amounts[amounts.length - 1], amountOutMin, "Output amount should be greater than minimum");
+        assertGe(
+            amounts[amounts.length - 1], minReturnAmount, "Output amount should be greater than or equal to minimum"
+        );
 
         vm.stopPrank();
     }
