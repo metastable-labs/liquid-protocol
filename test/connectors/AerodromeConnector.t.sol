@@ -7,6 +7,7 @@ import "../../src/connectors/base/aerodrome/main.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IRouter} from "@aerodrome/contracts/contracts/interfaces/IRouter.sol";
 import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/IPoolFactory.sol";
+import {IPool} from "@aerodrome/contracts/contracts/interfaces/IPool.sol";
 
 contract AerodromeConnectorTest is Test {
     AerodromeConnector public connector;
@@ -17,7 +18,10 @@ contract AerodromeConnectorTest is Test {
     address public constant AERODROME_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
     address public constant WETH = 0x4200000000000000000000000000000000000006;
     address public constant AERO = 0x940181a94A35A4569E4529A3CDfB74e38FD98631;
+    address public constant USDT = 0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2;
+    address public constant DOLA = 0x4621b7A9c75199271F773Ebd9A499dbd165c3191;
 
+    // You'll need to replace these with actual addresses from the Aerodrome deployment
     address public constant USDC_WETH_POOL = 0xcDAC0d6c6C59727a65F871236188350531885C43;
     address public constant USDC_WETH_GAUGE = 0x519BBD1Dd8C6A94C46080E24f316c14Ee758C025;
 
@@ -27,21 +31,33 @@ contract AerodromeConnectorTest is Test {
     function setUp() public {
         vm.createSelectFork(vm.envString("BASE_RPC_URL"));
 
-        connector = new AerodromeConnector("AerodromeConnector", 1);
+        connector = new AerodromeConnector("AerodromeConnector", 1, address(1));
 
         vm.deal(ALICE, INITIAL_ETH_BALANCE);
         deal(USDC, ALICE, INITIAL_BALANCE);
         deal(WETH, ALICE, INITIAL_ETH_BALANCE);
+        deal(USDT, ALICE, INITIAL_BALANCE);
+        deal(AERO, ALICE, INITIAL_ETH_BALANCE);
+        deal(DOLA, ALICE, INITIAL_ETH_BALANCE);
 
         vm.startPrank(ALICE);
         IERC20(USDC).approve(address(connector), type(uint256).max);
         IERC20(WETH).approve(address(connector), type(uint256).max);
         IERC20(USDC_WETH_POOL).approve(address(connector), type(uint256).max);
+        IERC20(USDT).approve(address(connector), type(uint256).max);
+        IERC20(AERO).approve(address(connector), type(uint256).max);
+        IERC20(DOLA).approve(address(connector), type(uint256).max);
+
         vm.stopPrank();
 
         vm.startPrank(address(connector));
         IERC20(WETH).approve(AERODROME_ROUTER, type(uint256).max);
         IERC20(USDC).approve(AERODROME_ROUTER, type(uint256).max);
+        IERC20(USDT).approve(AERODROME_ROUTER, type(uint256).max);
+        IERC20(AERO).approve(AERODROME_ROUTER, type(uint256).max);
+        IERC20(DOLA).approve(AERODROME_ROUTER, type(uint256).max);
+
+
         vm.stopPrank();
     }
 
@@ -75,17 +91,226 @@ contract AerodromeConnectorTest is Test {
 
         console.log("Liquidity balance of Alice before deposit", IERC20(pool).balanceOf(ALICE));
 
-        bytes memory result = connector.execute(abi.encodePacked(data, ALICE));
+        bytes memory result = connector.execute(data);
         (uint256 amountA, uint256 amountB, uint256 liquidity) = abi.decode(result, (uint256, uint256, uint256));
 
-        console.log("Liquidity added: %s USDC, %s WETH, %s LP", amountA, amountB, liquidity);
+        console.log("Liquidity added: %e USDC, %e WETH", amountA, amountB);
 
         assertGt(amountA, 0, "Amount A should be greater than 0");
         assertGt(amountB, 0, "Amount B should be greater than 0");
         assertGt(liquidity, 0, "Liquidity should be greater than 0");
 
-        console.log("Liquidity balance of Alice after deposit", IERC20(pool).balanceOf(ALICE));
+        // console.log("USDC balance after: %e", IERC20(USDC).balanceOf(ALICE));
+        // console.log("WETH balance after: %e", IERC20(WETH).balanceOf(ALICE));
+        console.log("Liquidity balance of Alice after deposit: %e", IERC20(pool).balanceOf(ALICE));
 
+        vm.stopPrank();
+    }
+
+    // weth/usdc fuzz test
+    function test_fuzz_addLiquidity(uint256 amountA, uint256 amountB) public {
+        uint256 amountADesired = 100 + amountA % (INITIAL_BALANCE - 100); // 1,000 USDC
+        uint256 amountBDesired = 1e13 + amountB % (INITIAL_ETH_BALANCE - 1e13);
+        uint256 amountAMin = 900 * 1e6;
+        uint256 amountBMin = 0.9 ether;
+        bool stable = false;
+        uint256 deadline = block.timestamp + 1 hours;
+
+        vm.startPrank(ALICE);
+
+        //console.log("USDC balance before: %s", IERC20(USDC).balanceOf(ALICE));
+        //console.log("WETH balance before: %s", IERC20(WETH).balanceOf(ALICE));
+
+        bytes memory data = abi.encodeWithSelector(
+            IRouter.addLiquidity.selector,
+            USDC,
+            WETH,
+            stable,
+            amountADesired,
+            amountBDesired,
+            amountAMin,
+            amountBMin,
+            ALICE,
+            deadline
+        );
+
+        address pool = IPoolFactory(AERODROME_FACTORY).getPool(USDC, WETH, stable);
+
+        console.log("Liquidity balance of Alice before deposit: %e", IERC20(pool).balanceOf(ALICE));
+
+        bytes memory result = connector.execute(data);
+        (uint256 amountA, uint256 amountB, uint256 liquidity) = abi.decode(result, (uint256, uint256, uint256));
+
+        console.log("Liquidity added: %e USDC, %e WETH", amountA, amountB);
+
+        assertGt(amountA, 0, "Amount A should be greater than 0");
+        assertGt(amountB, 0, "Amount B should be greater than 0");
+        assertGt(liquidity, 0, "Liquidity should be greater than 0");
+
+        // console.log("USDC balance after: %s", IERC20(USDC).balanceOf(ALICE));
+        // console.log("WETH balance after: %s", IERC20(WETH).balanceOf(ALICE));
+        console.log("Liquidity balance of Alice after deposit: %e", IERC20(pool).balanceOf(ALICE));
+
+        vm.stopPrank();
+    }
+
+    function test_fuzz_aero_addLiquidity(uint256 amountA, uint256 amountB) public {
+        uint256 amountADesired = 100 + amountA % (INITIAL_BALANCE - 100); // 1,000 USDC
+        uint256 amountBDesired = 1e17 + amountB % (INITIAL_ETH_BALANCE - 1e17); // AERO
+        uint256 amountAMin = 900 * 1e6;
+        uint256 amountBMin = 0.9 ether;
+        bool stable = false;
+        uint256 deadline = block.timestamp + 1 hours;
+
+        vm.startPrank(ALICE);
+
+        //console.log("USDC balance before: %s", IERC20(USDC).balanceOf(ALICE));
+        //console.log("AERO balance before: %s", IERC20(WETH).balanceOf(ALICE));
+
+        bytes memory data = abi.encodeWithSelector(
+            IRouter.addLiquidity.selector,
+            USDC,
+            AERO,
+            stable,
+            amountADesired,
+            amountBDesired,
+            amountAMin,
+            amountBMin,
+            ALICE,
+            deadline
+        );
+
+        address pool = IPoolFactory(AERODROME_FACTORY).getPool(USDC, AERO, stable);
+
+        console.log("Liquidity balance of Alice before deposit: %e", IERC20(pool).balanceOf(ALICE));
+
+        bytes memory result = connector.execute(data);
+        (uint256 amountA, uint256 amountB, uint256 liquidity) = abi.decode(result, (uint256, uint256, uint256));
+
+        console.log("Liquidity added: %e USDC, %e AERO", amountA, amountB);
+
+        assertGt(amountA, 0, "Amount A should be greater than 0");
+        assertGt(amountB, 0, "Amount B should be greater than 0");
+        assertGt(liquidity, 0, "Liquidity should be greater than 0");
+
+        // console.log("USDC balance after: %s", IERC20(USDC).balanceOf(ALICE));
+        // console.log("WETH balance after: %s", IERC20(WETH).balanceOf(ALICE));
+        console.log("Liquidity balance of Alice after deposit: %e", IERC20(pool).balanceOf(ALICE));
+
+        vm.stopPrank();
+    }
+
+    // Testing the DOLA/USDC basic stable pair
+    function test_fuzz_dola_addLiquidity(uint256 a, uint256 b) public {
+        uint256 amountADesired = bound(a, 1e5, INITIAL_BALANCE - 0.1e6); // 1,000 USDC
+        uint256 amountBDesired = bound(b, 1e17, INITIAL_ETH_BALANCE - 1e17); // DOLA
+        uint256 amountAMin = 0;
+        uint256 amountBMin = 0 ether;
+        bool stable = true;
+        uint256 deadline = block.timestamp + 1 hours;
+
+        vm.startPrank(ALICE);
+
+        //console.log("USDC balance before: %s", IERC20(USDC).balanceOf(ALICE));
+        //console.log("AERO balance before: %s", IERC20(WETH).balanceOf(ALICE));
+
+        bytes memory data = abi.encodeWithSelector(
+            IRouter.addLiquidity.selector,
+            USDC,
+            DOLA,
+            stable,
+            amountADesired,
+            amountBDesired,
+            amountAMin,
+            amountBMin,
+            ALICE,
+            deadline
+        );
+
+        address pool = IPoolFactory(AERODROME_FACTORY).getPool(USDC, DOLA, stable);
+
+        console.log("Liquidity balance of Alice before deposit: %e", IERC20(pool).balanceOf(ALICE));
+
+        bytes memory result = connector.execute(data);
+        (uint256 amountA, uint256 amountB, uint256 liquidity) = abi.decode(result, (uint256, uint256, uint256));
+
+        console.log("Liquidity added: %e USDC, %e DOLA", amountA, amountB);
+
+        assertGt(amountA, 0, "Amount A should be greater than 0");
+        assertGt(amountB, 0, "Amount B should be greater than 0");
+        assertGt(liquidity, 0, "Liquidity should be greater than 0");
+
+        console.log("Liquidity balance of Alice after deposit: %e", IERC20(pool).balanceOf(ALICE));
+        vm.stopPrank();
+    }
+
+    function test_dola_addLiquidity() public {
+        uint256 amountADesired = 1000e6;
+        uint256 amountBDesired = 0;
+        uint256 amountAMin = 0;
+        uint256 amountBMin = 0;
+        bool stable = true;
+        uint256 deadline = block.timestamp + 1 hours;
+
+        vm.startPrank(ALICE);
+
+        //console.log("USDC balance before: %s", IERC20(USDC).balanceOf(ALICE));
+        //console.log("AERO balance before: %s", IERC20(WETH).balanceOf(ALICE));
+
+        bytes memory data = abi.encodeWithSelector(
+            IRouter.addLiquidity.selector,
+            USDC,
+            DOLA,
+            stable,
+            amountADesired,
+            amountBDesired,
+            amountAMin,
+            amountBMin,
+            ALICE,
+            deadline
+        );
+
+        address pool = IPoolFactory(AERODROME_FACTORY).getPool(USDC, DOLA, stable);
+
+        console.log("Liquidity balance of Alice before deposit: %e", IERC20(pool).balanceOf(ALICE));
+
+        bytes memory result = connector.execute(data);
+        (uint256 amountA, uint256 amountB, uint256 liquidity) = abi.decode(result, (uint256, uint256, uint256));
+
+        console.log("Liquidity added: %e USDC, %e DOLA", amountA, amountB);
+
+        assertGt(amountA, 0, "Amount A should be greater than 0");
+        assertGt(amountB, 0, "Amount B should be greater than 0");
+        assertGt(liquidity, 0, "Liquidity should be greater than 0");
+
+        console.log("Liquidity balance of Alice after deposit: %e", IERC20(pool).balanceOf(ALICE));
+        vm.stopPrank();
+    }
+
+    function test_incorrectMath_causesRevert() public {
+        uint256 amountADesired = 0;
+        uint256 amountBDesired = 1e9; // 1000 USDC. Some should get swapped to WETH
+        uint256 amountAMin = 900 * 1e6;
+        uint256 amountBMin = 0.9 ether;
+        bool stable = false;
+        uint256 deadline = block.timestamp + 1 hours;
+
+        vm.startPrank(ALICE);
+
+        bytes memory data = abi.encodeWithSelector(
+            IRouter.addLiquidity.selector,
+            WETH,
+            USDC,
+            stable,
+            amountADesired,
+            amountBDesired,
+            amountAMin,
+            amountBMin,
+            ALICE,
+            deadline
+        );
+
+        bytes memory result = connector.execute(data);
         vm.stopPrank();
     }
 
@@ -117,13 +342,20 @@ contract AerodromeConnectorTest is Test {
             IRouter.removeLiquidity.selector, USDC, WETH, stable, liquidity, amountAMin, amountBMin, ALICE, deadline
         );
 
-        bytes memory result = connector.execute(abi.encodePacked(data, ALICE));
-        (uint256 amountA, uint256 amountB) = abi.decode(result, (uint256, uint256));
+        try connector.execute(data) returns (bytes memory result) {
+            (uint256 amountA, uint256 amountB) = abi.decode(result, (uint256, uint256));
 
-        console.log("Liquidity removed: %s USDC, %s WETH", amountA, amountB);
+            console.log("Liquidity removed: %s USDC, %s WETH", amountA, amountB);
 
-        assertGt(amountA, 0, "Amount A should be greater than 0");
-        assertGt(amountB, 0, "Amount B should be greater than 0");
+            assertGt(amountA, 0, "Amount A should be greater than 0");
+            assertGt(amountB, 0, "Amount B should be greater than 0");
+        } catch Error(string memory reason) {
+            console.log("Error: %s", reason);
+            assertTrue(false, "Remove liquidity should not revert");
+        } catch (bytes memory lowLevelData) {
+            console.logBytes(lowLevelData);
+            assertTrue(false, "Remove liquidity should not revert");
+        }
 
         console.log("LP token balance after: %s", IERC20(pair).balanceOf(ALICE));
         console.log("USDC balance after: %s", IERC20(USDC).balanceOf(ALICE));
@@ -156,7 +388,7 @@ contract AerodromeConnectorTest is Test {
             IRouter.swapExactTokensForTokens.selector, amountIn, minReturnAmount, routes, ALICE, deadline
         );
 
-        bytes memory result = connector.execute(abi.encodePacked(data, ALICE));
+        bytes memory result = connector.execute(data);
         uint256[] memory amounts = abi.decode(result, (uint256[]));
 
         console.log("Swapped: %s USDC for %s WETH", amounts[0], amounts[amounts.length - 1]);
@@ -189,7 +421,7 @@ contract AerodromeConnectorTest is Test {
 
         bytes memory data = abi.encodeWithSelector(IGauge.deposit.selector, USDC_WETH_GAUGE, depositAmount);
 
-        connector.execute(abi.encodePacked(data, ALICE));
+        connector.execute(data);
 
         assertEq(IGauge(USDC_WETH_GAUGE).balanceOf(ALICE), depositAmount, "Gauge balance should match deposit amount");
         assertEq(IERC20(USDC_WETH_POOL).balanceOf(ALICE), lpBalance - depositAmount, "LP token balance should decrease");
@@ -201,6 +433,6 @@ contract AerodromeConnectorTest is Test {
         bytes memory data = abi.encodeWithSelector(bytes4(keccak256("invalidFunction()")));
 
         vm.expectRevert(abi.encodeWithSelector(AerodromeConnector.InvalidSelector.selector));
-        connector.execute(abi.encodePacked(data, ALICE));
+        connector.execute(data);
     }
 }
