@@ -287,6 +287,7 @@ contract AerodromeConnectorTest is Test {
         vm.stopPrank();
     }
 
+    // This test passes since the issue is fixed
     function test_incorrectMath_causesRevert() public {
         uint256 amountADesired = 0;
         uint256 amountBDesired = 1e9; // 1000 USDC. Some should get swapped to WETH

@@ -148,7 +148,7 @@ library AerodromeUtils {
 
         if (!stable) {
             if (!sellTokenA) {
-                tokensToSell = calculateAmountIn(y, x, b, a, bDecMultiplier, aDecMultiplier) / bDecMultiplier;
+                tokensToSell = calculateAmountIn(y, x, b, a, bDecMultiplier, aDecMultiplier);
                 uint256 amtToReceive = calculateAmountOut(tokensToSell, y, x);
                 amountOutMin = (amtToReceive * 9999) / 10_000; // allow for 1bip of error
             } else {
