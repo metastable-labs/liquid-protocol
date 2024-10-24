@@ -109,10 +109,10 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     /// @param caller The original caller of this function
     /// @return amountAUsed The amount of tokenA actually deposited
     /// @return amountBUsed The amount of tokenB actually deposited
-    /// @return liquidity The amount of liquidity tokens received
+    /// @return liquidityDeposited The amount of liquidity tokens received
     function _depositBasicLiquidity(bytes calldata data, address caller)
         internal
-        returns (uint256 amountAUsed, uint256 amountBUsed, uint256 liquidity)
+        returns (uint256 amountAUsed, uint256 amountBUsed, uint256 liquidityDeposited)
     {
         (
             address tokenA,
@@ -127,36 +127,48 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
-        _receiveTokensFromCaller(tokenA, amountAIn, tokenB, amountBIn, caller);
-
-        //TODO: price impact check
-        (uint256[] memory amounts, bool sellTokenA) = AerodromeUtils.balanceTokenRatio(
-            tokenA, tokenB, amountAIn, amountBIn, stable, address(aerodromeRouter)
-        );
-
-        uint256 amountAInitial = amountAIn;
-        uint256 amountBInitial = amountBIn;
-        (amountAIn, amountBIn) = _updateAmountsIn(amountAIn, amountBIn, sellTokenA, amounts);
-
-        // Approve tokens to router
-        IERC20(tokenA).approve(address(aerodromeRouter), amountAIn);
-        IERC20(tokenB).approve(address(aerodromeRouter), amountBIn);
-
         address pool = aerodromeFactory.getPool(tokenA, tokenB, stable);
         if (pool == address(0)) revert PoolDoesNotExist();
+         
+        _receiveTokensFromCaller(tokenA, amountAIn, tokenB, amountBIn, caller);
 
-        (amountAUsed, amountBUsed, liquidity) = aerodromeRouter.addLiquidity(
-            tokenA, tokenB, stable, amountAIn, amountBIn, 0, 0, to, deadline
-        );
+        uint256 ratioBefore = AerodromeUtils.reserveRatio(pool);
+                
+        uint256 amountALeft = amountAIn;
+        uint256 amountBLeft = amountBIn;
+        
+        for (uint256 i = 0; i < 2; i++) {
+            (uint256[] memory amounts, bool sellTokenA) = AerodromeUtils.balanceTokenRatio(
+                tokenA, tokenB, amountALeft, amountBLeft, stable
+            );
 
-        uint256 leftoverA = amountAIn - amountAUsed;
-        uint256 leftoverB = amountBIn - amountBUsed;
+            (amountALeft, amountBLeft) = _updateAmountsIn(amountALeft, amountBLeft, sellTokenA, amounts);
 
-        AerodromeUtils.checkValueOut(amountAInitial, amountBInitial, liquidity, leftoverA, leftoverB, tokenA, tokenB, stable, slippageTolerancePips);
+            // Approve tokens to router
+            IERC20(tokenA).approve(address(aerodromeRouter), amountALeft);
+            IERC20(tokenB).approve(address(aerodromeRouter), amountBLeft);
 
-        AerodromeUtils.returnLeftovers(tokenA, tokenB, leftoverA, leftoverB, caller);
+            (uint256 amountADeposited, uint256 amountBDeposited, uint256 liquidity) = aerodromeRouter.addLiquidity(
+                tokenA, tokenB, stable, amountALeft, amountBLeft, 0, 0, to, deadline // 0 amountOutMin because we do checkValueOut()
+            );
 
-        emit LiquidityAdded(tokenA, tokenB, amountAUsed, amountBUsed, liquidity);
+            amountALeft -= amountADeposited;
+            amountBLeft -= amountBDeposited;
+
+            amountAUsed += amountADeposited;
+            amountBUsed += amountBDeposited;
+
+            liquidityDeposited += liquidity;
+
+            if (!stable) break; // only iterate twice for stable pairs
+        }
+        AerodromeUtils.checkPriceImpact(pool, ratioBefore);
+
+        AerodromeUtils.checkValueOut(amountAIn, amountBIn, liquidityDeposited, amountALeft, amountBLeft, tokenA, tokenB, stable, slippageTolerancePips);
+
+        AerodromeUtils.returnLeftovers(tokenA, tokenB, amountALeft, amountBLeft, caller);
+        
+        emit LiquidityAdded(tokenA, tokenB, amountAUsed, amountBUsed, liquidityDeposited);
     }
 
     /// @notice Removes liquidity from an Aerodrome pool

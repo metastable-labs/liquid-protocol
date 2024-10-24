@@ -62,7 +62,7 @@ contract Integration is Test {
         uint256 amountBDesired = 1 ether; // 1 WETH
         bool stable = false;
         uint256 deadline = block.timestamp + 1 hours;
-        uint256 slippage = 5e3; // 0.5%
+        uint256 slippage = 60; // 0.6%
 
         vm.startPrank(ALICE);
 
@@ -104,7 +104,7 @@ contract Integration is Test {
         uint256 amountBDesired = 1 ether; // 1 WETH
         bool stable = false;
         uint256 deadline = block.timestamp + 1 hours;
-        uint256 slippage = 5e3; // 0.5%
+        uint256 slippage = 60; // 0.6%
 
         vm.startPrank(ALICE);
 
