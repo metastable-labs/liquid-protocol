@@ -10,107 +10,22 @@ import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/
 import {IWETH} from "./interface.sol";
 import {Babylonian} from "../../../lib/Babylonian.sol";
 
+import {console} from "forge-std/console.sol";
+
 /// @title AerodromeUtils
 /// @notice A library for Aerodrome-specific utilities and calculations
 /// @dev This library contains helper functions for price checks, token ratio balancing, and liquidity operations
 library AerodromeUtils {
-    error PriceImpactTooHigh();
-    error PriceDeviationTooHigh();
+    error AerodromeUtils_PriceImpactTooHigh();
+    error AerodromeUtils_ExceededMaxSlippage();
 
     uint256 constant WAD = 1e18;
     uint256 constant RAY = 1e27;
 
-    /// @notice Checks the price ratio for a token pair
-    /// @dev Verifies if the price impact is within acceptable limits for both stable and volatile pools
-    /// @param tokenA The address of the first token
-    /// @param tokenB The address of the second token
-    /// @param amountA The amount of tokenA
-    /// @param amountB The amount of tokenB
-    /// @param stable Boolean indicating if it's a stable pool
-    /// @param aerodromeRouter The address of the Aerodrome router
-    /// @param aerodromeFactory The address of the Aerodrome factory
-    /// @param liqSlippage The allowed slippage for liquidity operations
-    function checkPriceRatio(
-        address tokenA,
-        address tokenB,
-        uint256 amountA,
-        uint256 amountB,
-        bool stable,
-        address aerodromeRouter,
-        address aerodromeFactory,
-        uint256 liqSlippage
-    ) internal view {
-        uint256 aDecMultiplier = 10 ** (18 - IERC20Metadata(tokenA).decimals());
-        uint256 bDecMultiplier = 10 ** (18 - IERC20Metadata(tokenB).decimals());
+    address internal constant WETH = 0x4200000000000000000000000000000000000006;
+    address internal constant AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
+    address internal constant AERODROME_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
 
-        if (stable) {
-            // Basic stable pool
-            IPool pool = IPool(IPoolFactory(aerodromeFactory).getPool(tokenA, tokenB, true));
-
-            require(amountA > 0 || amountB > 0, "Invalid amounts");
-
-            uint256 amountOut;
-            uint256 lowerBound;
-            uint256 upperBound;
-
-            if (amountA > 0) {
-                // divide amount by 10 to reduce price impact of theoretical swap
-                amountOut = pool.getAmountOut(amountA / 10, tokenA);
-                lowerBound = mulDiv(amountA * aDecMultiplier, 10_000 - liqSlippage, 10_000);
-                upperBound = mulDiv(amountA * aDecMultiplier, 10_000 + liqSlippage, 10_000);
-
-                if (amountOut * bDecMultiplier * 10 < lowerBound || amountOut * bDecMultiplier * 10 > upperBound) {
-                    revert PriceImpactTooHigh();
-                }
-            } else {
-                // divide amount by 10 to reduce price impact of theoretical swap
-                amountOut = pool.getAmountOut(amountB / 10, tokenB);
-
-                lowerBound = mulDiv(amountB * bDecMultiplier, 10_000 - liqSlippage, 10_000);
-                upperBound = mulDiv(amountB * bDecMultiplier, 10_000 + liqSlippage, 10_000);
-
-                if (amountOut * aDecMultiplier * 10 < lowerBound || amountOut * aDecMultiplier * 10 > upperBound) {
-                    revert PriceImpactTooHigh();
-                }
-            }
-        } else {
-            // Basic volatile pool
-            (uint256 reserveA, uint256 reserveB) =
-                IRouter(aerodromeRouter).getReserves(tokenA, tokenB, false, IRouter(aerodromeRouter).defaultFactory());
-
-            // Ensure reserves are not zero to avoid division by zero
-            require(reserveA > 0 && reserveB > 0, "Zero reserves");
-
-            // Calculate the current price ratio from reserves
-            uint256 currentRatio = mulDiv(reserveB, RAY, reserveA);
-
-            // Calculate the input price ratio
-            uint256 inputRatio;
-            if (amountA > 0 && amountB > 0) {
-                inputRatio = mulDiv(amountB, RAY, amountA);
-            } else if (amountA > 0) {
-                // If only amountA is provided, use getAmountOut to estimate amountB
-                uint256 estimatedAmountB =
-                    IPool(IPoolFactory(aerodromeFactory).getPool(tokenA, tokenB, false)).getAmountOut(amountA, tokenA);
-                inputRatio = mulDiv(estimatedAmountB, RAY, amountA);
-            } else if (amountB > 0) {
-                // If only amountB is provided, use getAmountOut to estimate amountA
-                uint256 estimatedAmountA =
-                    IPool(IPoolFactory(aerodromeFactory).getPool(tokenA, tokenB, false)).getAmountOut(amountB, tokenB);
-                inputRatio = mulDiv(amountB, RAY, estimatedAmountA);
-            } else {
-                revert("Invalid amounts");
-            }
-
-            // Calculate the allowed deviation
-            uint256 allowedDeviation = mulDiv(currentRatio, liqSlippage, 10_000);
-
-            // // Check if the input ratio is within the allowed deviation
-            // if (diff(inputRatio, currentRatio) > allowedDeviation) {
-            //     revert PriceDeviationTooHigh();
-            // }
-        }
-    }
     /// @notice Balances the token ratio before adding liquidity
     /// @dev Performs necessary swaps to balance the token amounts according to the pool's current ratio
     /// @param tokenA The address of the first token
@@ -181,11 +96,40 @@ library AerodromeUtils {
             IRouter(aerodromeRouter).defaultFactory()
         );
 
+        IERC20(sellTokenA ? tokenA : tokenB).approve(aerodromeRouter, tokensToSell);
         amounts = IRouter(aerodromeRouter).swapExactTokensForTokens(
             tokensToSell, amountOutMin, routes, address(this), block.timestamp
         );
 
         return (amounts, sellTokenA);
+    }
+
+    
+    function checkValueOut(
+        uint256 amountAInitial, 
+        uint256 amountBInitial,
+        uint256 liquidity,
+        uint256 leftoverA,
+        uint256 leftoverB, 
+        address tokenA,
+        address tokenB,
+        bool stable,
+        uint256 slippageTolerance
+    ) internal {
+        address pool = IPoolFactory(AERODROME_FACTORY).getPool(tokenA, tokenB, stable);
+
+        uint256 valueIn = amountAInitial + IPool(pool).quote(tokenB, amountBInitial, 4);
+
+        address factory = IPool(pool).factory();
+        (uint256 amountAOut, uint256 amountBOut) = IRouter(AERODROME_ROUTER).quoteRemoveLiquidity(tokenA, tokenB, stable, factory, liquidity);
+
+        uint256 valueOut = amountAOut + leftoverA + IPool(pool).quote(tokenB, amountBOut + leftoverB, 4);
+
+        if (valueOut < valueIn) {
+            uint256 diffPips = (valueIn - valueOut) * 1e6 / valueIn;
+
+            if (diffPips > slippageTolerance) revert AerodromeUtils_ExceededMaxSlippage();
+        }
     }
 
     /// @notice Returns leftover tokens to the recipient
@@ -195,19 +139,17 @@ library AerodromeUtils {
     /// @param leftoverA The amount of leftover tokenA
     /// @param leftoverB The amount of leftover tokenB
     /// @param recipient The address to receive the leftover tokens
-    /// @param wethAddress The address of the wrapped ETH contract
     function returnLeftovers(
         address tokenA,
         address tokenB,
         uint256 leftoverA,
         uint256 leftoverB,
-        address recipient,
-        address wethAddress
+        address recipient
     ) internal {
         if (leftoverA > 0) {
-            if (tokenA == wethAddress) {
+            if (tokenA == WETH) {
                 // Unwrap WETH to ETH and send
-                IWETH(wethAddress).withdraw(leftoverA);
+                IWETH(WETH).withdraw(leftoverA);
                 (bool success,) = recipient.call{value: leftoverA}("");
                 require(success, "ETH transfer failed");
             } else {
@@ -215,9 +157,9 @@ library AerodromeUtils {
             }
         }
         if (leftoverB > 0) {
-            if (tokenB == wethAddress) {
+            if (tokenB == WETH) {
                 // Unwrap WETH to ETH and send
-                IWETH(wethAddress).withdraw(leftoverB);
+                IWETH(WETH).withdraw(leftoverB);
                 (bool success,) = recipient.call{value: leftoverB}("");
                 require(success, "ETH transfer failed");
             } else {

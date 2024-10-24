@@ -27,6 +27,7 @@ contract AerodromeConnectorTest is Test {
 
     uint256 public constant INITIAL_BALANCE = 1_000_000 * 1e6; // 1 million USDC
     uint256 public constant INITIAL_ETH_BALANCE = 1000 ether;
+    uint256 public constant INITIAL_AERO_BALANCE = 10_000 ether;
 
     function setUp() public {
         vm.createSelectFork(vm.envString("BASE_RPC_URL"));
@@ -37,7 +38,7 @@ contract AerodromeConnectorTest is Test {
         deal(USDC, ALICE, INITIAL_BALANCE);
         deal(WETH, ALICE, INITIAL_ETH_BALANCE);
         deal(USDT, ALICE, INITIAL_BALANCE);
-        deal(AERO, ALICE, INITIAL_ETH_BALANCE);
+        deal(AERO, ALICE, INITIAL_AERO_BALANCE);
         deal(DOLA, ALICE, INITIAL_ETH_BALANCE);
 
         vm.startPrank(ALICE);
@@ -50,12 +51,6 @@ contract AerodromeConnectorTest is Test {
 
         vm.stopPrank();
 
-        vm.startPrank(address(connector));
-        IERC20(WETH).approve(AERODROME_ROUTER, type(uint256).max);
-        IERC20(USDC).approve(AERODROME_ROUTER, type(uint256).max);
-        IERC20(USDT).approve(AERODROME_ROUTER, type(uint256).max);
-        IERC20(AERO).approve(AERODROME_ROUTER, type(uint256).max);
-        IERC20(DOLA).approve(AERODROME_ROUTER, type(uint256).max);
 
 
         vm.stopPrank();
@@ -64,8 +59,8 @@ contract AerodromeConnectorTest is Test {
     function testAddLiquidity() public {
         uint256 amountADesired = 1000 * 1e6; // 1,000 USDC
         uint256 amountBDesired = 1 ether; // 1 WETH
-        uint256 amountAMin = 900 * 1e6;
-        uint256 amountBMin = 0.9 ether;
+
+        uint256 slippage = 5e3; // 0.5%
         bool stable = false;
         uint256 deadline = block.timestamp + 1 hours;
 
@@ -81,8 +76,7 @@ contract AerodromeConnectorTest is Test {
             stable,
             amountADesired,
             amountBDesired,
-            amountAMin,
-            amountBMin,
+            slippage,
             ALICE,
             deadline
         );
@@ -108,13 +102,12 @@ contract AerodromeConnectorTest is Test {
     }
 
     // weth/usdc fuzz test
-    function test_fuzz_addLiquidity(uint256 amountA, uint256 amountB) public {
+    function fuzz_addLiquidity(uint256 amountA, uint256 amountB) public {
         uint256 amountADesired = 100 + amountA % (INITIAL_BALANCE - 100); // 1,000 USDC
         uint256 amountBDesired = 1e13 + amountB % (INITIAL_ETH_BALANCE - 1e13);
-        uint256 amountAMin = 900 * 1e6;
-        uint256 amountBMin = 0.9 ether;
         bool stable = false;
         uint256 deadline = block.timestamp + 1 hours;
+        uint256 slippage = 5e3; // 0.5%
 
         vm.startPrank(ALICE);
 
@@ -128,8 +121,7 @@ contract AerodromeConnectorTest is Test {
             stable,
             amountADesired,
             amountBDesired,
-            amountAMin,
-            amountBMin,
+            slippage,
             ALICE,
             deadline
         );
@@ -154,13 +146,12 @@ contract AerodromeConnectorTest is Test {
         vm.stopPrank();
     }
 
-    function test_fuzz_aero_addLiquidity(uint256 amountA, uint256 amountB) public {
+    function fuzz_aero_addLiquidity(uint256 amountA, uint256 amountB) public {
         uint256 amountADesired = 100 + amountA % (INITIAL_BALANCE - 100); // 1,000 USDC
         uint256 amountBDesired = 1e17 + amountB % (INITIAL_ETH_BALANCE - 1e17); // AERO
-        uint256 amountAMin = 900 * 1e6;
-        uint256 amountBMin = 0.9 ether;
         bool stable = false;
         uint256 deadline = block.timestamp + 1 hours;
+        uint256 slippage = 5e3; // 0.5%
 
         vm.startPrank(ALICE);
 
@@ -174,8 +165,7 @@ contract AerodromeConnectorTest is Test {
             stable,
             amountADesired,
             amountBDesired,
-            amountAMin,
-            amountBMin,
+            slippage,
             ALICE,
             deadline
         );
@@ -200,14 +190,58 @@ contract AerodromeConnectorTest is Test {
         vm.stopPrank();
     }
 
+    function test_aero_addLiquidity() public {
+        uint256 amountADesired = INITIAL_BALANCE / 10; // 100k USDC
+        uint256 amountBDesired = INITIAL_AERO_BALANCE; //  10k AERO
+        bool stable = false;
+        uint256 deadline = block.timestamp + 1 hours;
+        uint256 slippage = 5e3; // 0.5%
+
+        vm.startPrank(ALICE);
+
+        //console.log("USDC balance before: %s", IERC20(USDC).balanceOf(ALICE));
+        //console.log("AERO balance before: %s", IERC20(WETH).balanceOf(ALICE));
+
+        bytes memory data = abi.encodeWithSelector(
+            IRouter.addLiquidity.selector,
+            USDC,
+            AERO,
+            stable,
+            amountADesired,
+            amountBDesired,
+            slippage,
+            ALICE,
+            deadline
+        );
+
+        address pool = IPoolFactory(AERODROME_FACTORY).getPool(USDC, AERO, stable);
+
+        console.log("Liquidity balance of Alice before deposit: %e", IERC20(pool).balanceOf(ALICE));
+
+        bytes memory result = connector.execute(data);
+        (uint256 amountA, uint256 amountB, uint256 liquidity) = abi.decode(result, (uint256, uint256, uint256));
+
+        console.log("Liquidity added: %e USDC, %e AERO", amountA, amountB);
+
+        assertGt(amountA, 0, "Amount A should be greater than 0");
+        assertGt(amountB, 0, "Amount B should be greater than 0");
+        assertGt(liquidity, 0, "Liquidity should be greater than 0");
+
+        // console.log("USDC balance after: %s", IERC20(USDC).balanceOf(ALICE));
+        // console.log("WETH balance after: %s", IERC20(WETH).balanceOf(ALICE));
+        console.log("Liquidity balance of Alice after deposit: %e", IERC20(pool).balanceOf(ALICE));
+
+        vm.stopPrank();
+    }
+
+
     // Testing the DOLA/USDC basic stable pair
-    function test_fuzz_dola_addLiquidity(uint256 a, uint256 b) public {
+    function fuzz_dola_addLiquidity(uint256 a, uint256 b) public {
         uint256 amountADesired = bound(a, 1e5, INITIAL_BALANCE - 0.1e6); // 1,000 USDC
         uint256 amountBDesired = bound(b, 1e17, INITIAL_ETH_BALANCE - 1e17); // DOLA
-        uint256 amountAMin = 0;
-        uint256 amountBMin = 0 ether;
         bool stable = true;
         uint256 deadline = block.timestamp + 1 hours;
+        uint256 slippage = 5e3; // 0.5%
 
         vm.startPrank(ALICE);
 
@@ -221,8 +255,7 @@ contract AerodromeConnectorTest is Test {
             stable,
             amountADesired,
             amountBDesired,
-            amountAMin,
-            amountBMin,
+            slippage,
             ALICE,
             deadline
         );
@@ -251,6 +284,7 @@ contract AerodromeConnectorTest is Test {
         uint256 amountBMin = 0;
         bool stable = true;
         uint256 deadline = block.timestamp + 1 hours;
+        uint256 slippage = 5e3; // 0.5%
 
         vm.startPrank(ALICE);
 
@@ -264,8 +298,7 @@ contract AerodromeConnectorTest is Test {
             stable,
             amountADesired,
             amountBDesired,
-            amountAMin,
-            amountBMin,
+            slippage,
             ALICE,
             deadline
         );
@@ -295,6 +328,7 @@ contract AerodromeConnectorTest is Test {
         uint256 amountBMin = 0.9 ether;
         bool stable = false;
         uint256 deadline = block.timestamp + 1 hours;
+        uint256 slippage = 5e3; // 0.5%
 
         vm.startPrank(ALICE);
 
@@ -305,8 +339,7 @@ contract AerodromeConnectorTest is Test {
             stable,
             amountADesired,
             amountBDesired,
-            amountAMin,
-            amountBMin,
+            slippage,
             ALICE,
             deadline
         );

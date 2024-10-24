@@ -26,6 +26,9 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     error SlippageExceeded();
     error UnauthorizedCaller();
 
+    error IncorrectETHAmount();
+    error PoolDoesNotExist();
+
     /// @notice Initializes the AerodromeConnector
     /// @param name Name of the connector
     /// @param version Version of the connector
@@ -75,12 +78,9 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         if (block.timestamp > deadline) revert DeadlineExpired();
 
         address tokenIn = routes[0].from;
-        if (tokenIn == WETH && msg.value > 0) {
-            IWETH(WETH).deposit{value: msg.value}();
-        }
-        else {
-            IERC20(tokenIn).transferFrom(caller, address(this), amountIn);
-        }
+
+        _receiveTokensFromCaller(tokenIn, amountIn, address(0), 0, caller);
+
         IERC20(tokenIn).approve(address(aerodromeRouter), amountIn);
 
         address tokenOut = routes[routes.length - 1].to;
@@ -107,12 +107,12 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     /// @dev Handles the process of adding liquidity, including price checks and token swaps
     /// @param data The calldata containing function parameters
     /// @param caller The original caller of this function
-    /// @return amountAOut The amount of tokenA actually deposited
-    /// @return amountBOut The amount of tokenB actually deposited
+    /// @return amountAUsed The amount of tokenA actually deposited
+    /// @return amountBUsed The amount of tokenB actually deposited
     /// @return liquidity The amount of liquidity tokens received
     function _depositBasicLiquidity(bytes calldata data, address caller)
         internal
-        returns (uint256 amountAOut, uint256 amountBOut, uint256 liquidity)
+        returns (uint256 amountAUsed, uint256 amountBUsed, uint256 liquidity)
     {
         (
             address tokenA,
@@ -120,72 +120,43 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
             bool stable,
             uint256 amountAIn,
             uint256 amountBIn,
-            uint256 amountAMin,
-            uint256 amountBMin,
+            uint256 slippageTolerancePips,
             address to,
             uint256 deadline
-        ) = abi.decode(data[4:], (address, address, bool, uint256, uint256, uint256, uint256, address, uint256));
+        ) = abi.decode(data[4:], (address, address, bool, uint256, uint256, uint256, address, uint256));
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
-        if (amountAIn > 0) {
-            if (tokenA == WETH && msg.value > 0) {
-                IWETH(WETH).deposit{value: msg.value}();
-            }
-            else {
-                IERC20(tokenA).transferFrom(caller, address(this), amountAIn);
-            }
-        }
-        if (amountBIn > 0) {
-            if (tokenB == WETH && msg.value > 0) {
-                IWETH(WETH).deposit{value: msg.value}();
-            }
-            else {
-                IERC20(tokenB).transferFrom(caller, address(this), amountBIn);
-            }
-        }
-
-        require(IERC20(tokenA).balanceOf(address(this)) >= amountAIn, "Insufficient tokenA balance");
-        require(IERC20(tokenB).balanceOf(address(this)) >= amountBIn, "Insufficient tokenB balance");
+        _receiveTokensFromCaller(tokenA, amountAIn, tokenB, amountBIn, caller);
 
         //TODO: price impact check
         (uint256[] memory amounts, bool sellTokenA) = AerodromeUtils.balanceTokenRatio(
             tokenA, tokenB, amountAIn, amountBIn, stable, address(aerodromeRouter)
         );
 
-        if (sellTokenA) {
-            amountAIn -= amounts[0];
-            amountBIn += amounts[1];
-        } else {
-            amountBIn -= amounts[0];
-            amountAIn += amounts[1];
-        }
+        uint256 amountAInitial = amountAIn;
+        uint256 amountBInitial = amountBIn;
+        (amountAIn, amountBIn) = _updateAmountsIn(amountAIn, amountBIn, sellTokenA, amounts);
 
         // Approve tokens to router
         IERC20(tokenA).approve(address(aerodromeRouter), amountAIn);
         IERC20(tokenB).approve(address(aerodromeRouter), amountBIn);
 
-        if (!stable) {
-            amountAMin = AerodromeUtils.mulDiv(amountAIn, 10_000 - LIQ_SLIPPAGE, 10_000);
-            amountBMin = AerodromeUtils.mulDiv(amountBIn, 10_000 - LIQ_SLIPPAGE, 10_000);
-        }
-
         address pool = aerodromeFactory.getPool(tokenA, tokenB, stable);
-        if (pool == address(0)) revert("Pool does not exist");
+        if (pool == address(0)) revert PoolDoesNotExist();
 
-        (amountAOut, amountBOut, liquidity) = aerodromeRouter.addLiquidity(
-            tokenA, tokenB, stable, amountAIn, amountBIn, amountAMin, amountBMin, to, deadline
+        (amountAUsed, amountBUsed, liquidity) = aerodromeRouter.addLiquidity(
+            tokenA, tokenB, stable, amountAIn, amountBIn, 0, 0, to, deadline
         );
 
-        if (liquidity == 0) revert InsufficientLiquidity();
-        //TODO: valueOut VS valueIn check using TWAP price
+        uint256 leftoverA = amountAIn - amountAUsed;
+        uint256 leftoverB = amountBIn - amountBUsed;
 
-        uint256 leftoverA = amountAIn - amountAOut;
-        uint256 leftoverB = amountBIn - amountBOut;
+        AerodromeUtils.checkValueOut(amountAInitial, amountBInitial, liquidity, leftoverA, leftoverB, tokenA, tokenB, stable, slippageTolerancePips);
 
-        AerodromeUtils.returnLeftovers(tokenA, tokenB, leftoverA, leftoverB, caller, WETH);
+        AerodromeUtils.returnLeftovers(tokenA, tokenB, leftoverA, leftoverB, caller);
 
-        emit LiquidityAdded(tokenA, tokenB, amountAOut, amountBOut, liquidity);
+        emit LiquidityAdded(tokenA, tokenB, amountAUsed, amountBUsed, liquidity);
     }
 
     /// @notice Removes liquidity from an Aerodrome pool
@@ -211,11 +182,11 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
-        address pair = aerodromeFactory.getPool(tokenA, tokenB, stable);
-        if (pair == address(0)) revert("Pair does not exist");
+        address pool = aerodromeFactory.getPool(tokenA, tokenB, stable);
+        if (pool == address(0)) revert PoolDoesNotExist();
 
-        IERC20(pair).transferFrom(caller, address(this), liquidity);
-        IERC20(pair).approve(address(aerodromeRouter), liquidity);
+        IERC20(pool).transferFrom(caller, address(this), liquidity);
+        IERC20(pool).approve(address(aerodromeRouter), liquidity);
 
         (amountA, amountB) =
             aerodromeRouter.removeLiquidity(tokenA, tokenB, stable, liquidity, amountAMin, amountBMin, to, deadline);
@@ -238,5 +209,39 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
         emit LPTokenStaked(gaugeAddress, amount);
         return abi.encode(amount, caller);
+    }
+
+    function _receiveTokensFromCaller(address tokenA, uint256 amountA, address tokenB, uint256 amountB, address caller) internal {
+        if (amountA > 0) {
+            if (tokenA == WETH && msg.value > 0) {
+                if (msg.value != amountA) revert IncorrectETHAmount();
+
+                IWETH(WETH).deposit{value: msg.value}();
+            }
+            else {
+                IERC20(tokenA).transferFrom(caller, address(this), amountA);
+            }
+        }
+        if (amountB > 0) {
+            if (tokenB == WETH && msg.value > 0) {
+                if (msg.value != amountB) revert IncorrectETHAmount();
+
+                IWETH(WETH).deposit{value: msg.value}();
+            }
+            else {
+                IERC20(tokenB).transferFrom(caller, address(this), amountB);
+            }
+        }
+    }
+
+    function _updateAmountsIn(uint256 a, uint256 b, bool sellTokenA, uint256[] memory amounts) internal pure returns(uint256 amountAIn, uint256 amountBIn) {
+        if (sellTokenA) {
+            amountAIn = a - amounts[0];
+            amountBIn = b + amounts[1];
+        } else {
+            amountBIn = b - amounts[0];
+            amountAIn = a + amounts[1];
+        }
+        
     }
 }

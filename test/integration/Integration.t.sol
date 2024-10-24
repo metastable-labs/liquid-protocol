@@ -60,10 +60,9 @@ contract Integration is Test {
     function test_plugin_addLiquidity() public {
         uint256 amountADesired = 1000 * 1e6; // 1,000 USDC
         uint256 amountBDesired = 1 ether; // 1 WETH
-        uint256 amountAMin = 900 * 1e6;
-        uint256 amountBMin = 0.9 ether;
         bool stable = false;
         uint256 deadline = block.timestamp + 1 hours;
+        uint256 slippage = 5e3; // 0.5%
 
         vm.startPrank(ALICE);
 
@@ -75,8 +74,7 @@ contract Integration is Test {
             stable,
             amountADesired,
             amountBDesired,
-            amountAMin,
-            amountBMin,
+            slippage,
             ALICE,
             deadline
         );
@@ -104,10 +102,9 @@ contract Integration is Test {
     function test_plugin_addLiquidityETH() public {
         uint256 amountADesired = 1000 * 1e6; // 1,000 USDC
         uint256 amountBDesired = 1 ether; // 1 WETH
-        uint256 amountAMin = 900 * 1e6;
-        uint256 amountBMin = 0.9 ether;
         bool stable = false;
         uint256 deadline = block.timestamp + 1 hours;
+        uint256 slippage = 5e3; // 0.5%
 
         vm.startPrank(ALICE);
 
@@ -118,8 +115,7 @@ contract Integration is Test {
             stable,
             amountADesired,
             amountBDesired,
-            amountAMin,
-            amountBMin,
+            slippage,
             ALICE,
             deadline
         );
