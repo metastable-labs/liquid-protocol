@@ -63,6 +63,16 @@ contract AerodromeConnectorTest is Test {
         vm.warp(block.timestamp + 15);
     }
 
+    function _dealAndApprove(address tokenA, address tokenB, uint256 a, uint256 b, address toApprove) internal {
+        deal(tokenA, ALICE, a);
+        deal(tokenB, ALICE, b);
+
+        vm.startPrank(ALICE);
+        IERC20(tokenA).approve(toApprove, a);
+        IERC20(tokenB).approve(toApprove, b);
+        vm.stopPrank();
+    }
+
     function testAddLiquidity() public {
         uint256 amountADesired = 100e18; // 100 AERO
         uint256 amountBDesired = 1 ether; // 1 WETH
@@ -73,6 +83,8 @@ contract AerodromeConnectorTest is Test {
         address tokenA = TOKENA;
         address tokenB = WETH;
         bool stable = false;
+
+        _dealAndApprove(tokenA, tokenB, amountADesired, amountBDesired, address(connector));
 
         (uint256 amountAMin, uint256 amountBMin) = 
             _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, true, slippage);
@@ -86,8 +98,8 @@ contract AerodromeConnectorTest is Test {
 
         bytes memory data = abi.encodeWithSelector(
             IRouter.addLiquidity.selector,
-            TOKENA,
-            WETH,
+            tokenA,
+            tokenB,
             stable,
             amountADesired,
             amountBDesired,
@@ -140,8 +152,8 @@ contract AerodromeConnectorTest is Test {
         vm.startPrank(ALICE);
         bytes memory data = abi.encodeWithSelector(
             IRouter.addLiquidity.selector,
-            TOKENA,
-            WETH,
+            tokenA,
+            tokenB,
             stable,
             amountADesired,
             amountBDesired,
@@ -178,8 +190,8 @@ contract AerodromeConnectorTest is Test {
 
         bytes memory data = abi.encodeWithSelector(
             IRouter.addLiquidity.selector,
-            TOKENA,
-            WETH,
+            tokenA,
+            tokenB,
             stable,
             amountADesired,
             amountBDesired,
@@ -220,8 +232,8 @@ contract AerodromeConnectorTest is Test {
 
         bytes memory data = abi.encodeWithSelector(
             IRouter.addLiquidity.selector,
-            USDC,
-            WETH,
+            tokenA,
+            tokenB,
             stable,
             amountADesired,
             amountBDesired,
@@ -305,8 +317,8 @@ contract AerodromeConnectorTest is Test {
 
         bytes memory data = abi.encodeWithSelector(
             IRouter.addLiquidity.selector,
-            USDC,
-            AERO,
+            tokenA,
+            tokenB,
             stable,
             amountADesired,
             amountBDesired,
@@ -349,8 +361,8 @@ contract AerodromeConnectorTest is Test {
 
         bytes memory data = abi.encodeWithSelector(
             IRouter.addLiquidity.selector,
-            USDC,
-            AERO,
+            tokenA,
+            tokenB,
             stable,
             amountADesired,
             amountBDesired,
@@ -401,8 +413,8 @@ contract AerodromeConnectorTest is Test {
 
         bytes memory data = abi.encodeWithSelector(
             IRouter.addLiquidity.selector,
-            USDC,
-            DOLA,
+            tokenA,
+            tokenB,
             stable,
             amountADesired,
             amountBDesired,
@@ -443,8 +455,8 @@ contract AerodromeConnectorTest is Test {
 
         bytes memory data = abi.encodeWithSelector(
             IRouter.addLiquidity.selector,
-            USDC,
-            DOLA,
+            tokenA,
+            tokenB,
             stable,
             amountADesired,
             amountBDesired,
@@ -485,8 +497,8 @@ contract AerodromeConnectorTest is Test {
 
         bytes memory data = abi.encodeWithSelector(
             IRouter.addLiquidity.selector,
-            WETH,
-            USDC,
+            tokenA,
+            tokenB,
             stable,
             amountADesired,
             amountBDesired,
