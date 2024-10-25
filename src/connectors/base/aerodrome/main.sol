@@ -166,7 +166,7 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         }
         AerodromeUtils.checkPriceImpact(pool, ratioBefore);
 
-        AerodromeUtils.checkValueOut(liquidityDeposited, tokenA, tokenB, stable, amountAMin, amountBMin);
+        AerodromeUtils.checkValueOut(liquidityDeposited, tokenA, tokenB, stable, amountAMin, amountBMin, amountAIn, amountBIn);
 
         AerodromeUtils.returnLeftovers(tokenA, tokenB, amountALeft, amountBLeft, caller);
         

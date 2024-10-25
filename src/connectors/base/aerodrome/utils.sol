@@ -16,6 +16,7 @@ import {Babylonian} from "../../../lib/Babylonian.sol";
 library AerodromeUtils {
     error AerodromeUtils_ExceededMaxPriceImpact();
     error AerodromeUtils_ExceededMaxSlippage();
+    error AerodromeUtils_ExceededMaxValueLoss();
 
     uint256 internal constant WAD = 1e18;
     uint256 internal constant RAY = 1e27;
@@ -117,7 +118,9 @@ library AerodromeUtils {
         address tokenB,
         bool stable,
         uint256 amountAMin,
-        uint256 amountBMin
+        uint256 amountBMin,
+        uint256 amountAInitial, 
+        uint256 amountBInitial
     ) internal view returns(uint256) {
         // Calculate amountAOut, amountBOut
         address pool = IPoolFactory(AERODROME_FACTORY).getPool(tokenA, tokenB, stable);
@@ -128,6 +131,26 @@ library AerodromeUtils {
         // Ensure it meets the minimum amounts, computed offchain using `quoteDepositLiquidity()`
         if (amountAOut < amountAMin || amountBOut < amountBMin) {
             revert AerodromeUtils_ExceededMaxSlippage();
+        }
+
+        IRouter.Route[] memory routes = new IRouter.Route[](1);
+        routes[0] = IRouter.Route(tokenB, tokenA, stable, factory);
+
+        uint256[] memory convertedBToA = IRouter(AERODROME_ROUTER).getAmountsOut(amountBInitial, routes);
+        uint256 valueIn = amountAInitial + convertedBToA[1];
+
+        uint256 leftoverA = subFloorZero(amountAInitial, amountAOut);
+        uint256 leftoverB = subFloorZero(amountBInitial, amountBOut);
+
+        convertedBToA = IRouter(AERODROME_ROUTER).getAmountsOut(amountBOut + leftoverB, routes);
+        uint256 valueOut = amountAOut + leftoverA + convertedBToA[1];
+
+        // Check that value received is at least 98% of value provided
+        // Note: These values are determined based on spot price, but the earlier slippage check is used to prevent price manipulation
+        // This check is a last resort, to prevent loss of funds in low liquidity pools
+        if (valueOut < valueIn) {
+            uint256 diffBips = (valueIn - valueOut) * BIPS / valueIn;
+            if (diffBips > 200) revert AerodromeUtils_ExceededMaxValueLoss();
         }
     }
 
@@ -298,6 +321,10 @@ library AerodromeUtils {
 
     function diff(uint256 a, uint256 b) internal pure returns (uint256) {
         return a > b ? a - b : b - a;
+    }
+
+    function subFloorZero(uint256 a, uint256 b) internal pure returns(uint256) {
+        return a > b ? a - b : 0;
     }
 
 
