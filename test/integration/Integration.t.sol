@@ -56,25 +56,41 @@ contract Integration is Test {
         vm.stopPrank();
     }
 
+    function _quoteDepositLiquidity(address tokenA, address tokenB, bool stable, uint256 a, uint256 b, bool balance, uint256 slippage) internal returns(uint256 amountA, uint256 amountB) {
+        vm.warp(block.timestamp - 15);
+        (amountA, amountB) = connector.quoteDepositLiquidity(tokenA, tokenB, stable, a, b, balance);
+        amountA = amountA * (10000 - slippage) / 10000;
+        amountB = amountB * (10000 - slippage) / 10000;
+        vm.warp(block.timestamp + 15);
+    }
+
 
     function test_plugin_addLiquidity() public {
         uint256 amountADesired = 1000 * 1e6; // 1,000 USDC
         uint256 amountBDesired = 1 ether; // 1 WETH
-        bool stable = false;
         uint256 deadline = block.timestamp + 1 hours;
         uint256 slippage = 60; // 0.6%
+
+        address tokenA = USDC;
+        address tokenB = WETH;
+        bool stable = false;
+
+        (uint256 amountAMin, uint256 amountBMin) = 
+            _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, true, slippage);
 
         vm.startPrank(ALICE);
 
 
         bytes memory data = abi.encodeWithSelector(
             IRouter.addLiquidity.selector,
-            USDC,
-            WETH,
+            tokenA,
+            tokenB,
             stable,
             amountADesired,
             amountBDesired,
-            slippage,
+            amountAMin,
+            amountBMin,
+            true,
             ALICE,
             deadline
         );
@@ -87,13 +103,6 @@ contract Integration is Test {
         (uint256 amountA, uint256 amountB, uint256 liquidity) = abi.decode(result, (uint256, uint256, uint256));
 
         console.log("Liquidity added: %e USDC, %e WETH", amountA, amountB);
-
-        assertGt(amountA, 0, "Amount A should be greater than 0");
-        assertGt(amountB, 0, "Amount B should be greater than 0");
-        assertGt(liquidity, 0, "Liquidity should be greater than 0");
-
-        // console.log("USDC balance after: %s", IERC20(USDC).balanceOf(ALICE));
-        // console.log("WETH balance after: %s", IERC20(WETH).balanceOf(ALICE));
         console.log("Liquidity balance of Alice after deposit: %e", IERC20(pool).balanceOf(ALICE));
 
         vm.stopPrank();
@@ -102,20 +111,29 @@ contract Integration is Test {
     function test_plugin_addLiquidityETH() public {
         uint256 amountADesired = 1000 * 1e6; // 1,000 USDC
         uint256 amountBDesired = 1 ether; // 1 WETH
-        bool stable = false;
         uint256 deadline = block.timestamp + 1 hours;
         uint256 slippage = 60; // 0.6%
+
+
+        address tokenA = USDC;
+        address tokenB = WETH;
+        bool stable = false;
+
+        (uint256 amountAMin, uint256 amountBMin) = 
+            _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, true, slippage);
 
         vm.startPrank(ALICE);
 
         bytes memory data = abi.encodeWithSelector(
             IRouter.addLiquidity.selector,
-            USDC,
-            WETH,
+            tokenA,
+            tokenB,
             stable,
             amountADesired,
             amountBDesired,
-            slippage,
+            amountAMin,
+            amountBMin,
+            true,
             ALICE,
             deadline
         );

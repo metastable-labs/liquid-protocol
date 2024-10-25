@@ -120,10 +120,12 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
             bool stable,
             uint256 amountAIn,
             uint256 amountBIn,
-            uint256 slippageTolerancePips,
+            uint256 amountAMin,
+            uint256 amountBMin,
+            bool swapToBalanceTokens,
             address to,
             uint256 deadline
-        ) = abi.decode(data[4:], (address, address, bool, uint256, uint256, uint256, address, uint256));
+        ) = abi.decode(data[4:], (address, address, bool, uint256, uint256, uint256, uint256, bool, address, uint256));
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
@@ -142,7 +144,7 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
                 tokenA, tokenB, amountALeft, amountBLeft, stable
             );
 
-            (amountALeft, amountBLeft) = _updateAmountsIn(amountALeft, amountBLeft, sellTokenA, amounts);
+            (amountALeft, amountBLeft) = AerodromeUtils.updateAmountsIn(amountALeft, amountBLeft, sellTokenA, amounts);
 
             // Approve tokens to router
             IERC20(tokenA).approve(address(aerodromeRouter), amountALeft);
@@ -160,11 +162,11 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
             liquidityDeposited += liquidity;
 
-            if (!stable) break; // only iterate twice for stable pairs
+            if (!stable) break; // only iterate once for volatile pairs
         }
         AerodromeUtils.checkPriceImpact(pool, ratioBefore);
 
-        AerodromeUtils.checkValueOut(amountAIn, amountBIn, liquidityDeposited, amountALeft, amountBLeft, tokenA, tokenB, stable, slippageTolerancePips);
+        AerodromeUtils.checkValueOut(liquidityDeposited, tokenA, tokenB, stable, amountAMin, amountBMin);
 
         AerodromeUtils.returnLeftovers(tokenA, tokenB, amountALeft, amountBLeft, caller);
         
@@ -246,14 +248,14 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         }
     }
 
-    function _updateAmountsIn(uint256 a, uint256 b, bool sellTokenA, uint256[] memory amounts) internal pure returns(uint256 amountAIn, uint256 amountBIn) {
-        if (sellTokenA) {
-            amountAIn = a - amounts[0];
-            amountBIn = b + amounts[1];
-        } else {
-            amountBIn = b - amounts[0];
-            amountAIn = a + amounts[1];
-        }
-        
+    function quoteDepositLiquidity(
+        address tokenA, 
+        address tokenB, 
+        bool stable, 
+        uint256 amountA, 
+        uint256 amountB,
+        bool balanceTokenRatio
+    ) external view returns(uint256 amountAOut, uint256 amountBOut) {
+        (amountAOut, amountBOut) =  AerodromeUtils.quoteDepositLiquidity(tokenA, tokenB, stable, amountA, amountB, balanceTokenRatio);
     }
 }

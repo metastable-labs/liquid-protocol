@@ -89,6 +89,16 @@ library AerodromeUtils {
         return (amounts, sellTokenA);
     }
 
+    function updateAmountsIn(uint256 a, uint256 b, bool sellTokenA, uint256[] memory amounts) internal pure returns(uint256 amountAIn, uint256 amountBIn) {
+        if (sellTokenA) {
+            amountAIn = a - amounts[0];
+            amountBIn = b + amounts[1];
+        } else {
+            amountBIn = b - amounts[0];
+            amountAIn = a + amounts[1];
+        }
+    }
+
     function reserveRatio(address pool) internal view returns(uint256) {
         (uint256 reserveA, uint256 reserveB, ) = IPool(pool).getReserves();
         return reserveA * RAY / reserveB;
@@ -101,30 +111,23 @@ library AerodromeUtils {
         if (diffBips > MAX_PRICE_IMPACT) revert AerodromeUtils_ExceededMaxPriceImpact(); // 1%
     }
 
-    
     function checkValueOut(
-        uint256 amountAInitial, 
-        uint256 amountBInitial,
         uint256 liquidity,
-        uint256 leftoverA,
-        uint256 leftoverB, 
         address tokenA,
         address tokenB,
         bool stable,
-        uint256 slippageTolerance
-    ) internal view {
+        uint256 amountAMin,
+        uint256 amountBMin
+    ) internal view returns(uint256) {
+        // Calculate amountAOut, amountBOut
         address pool = IPoolFactory(AERODROME_FACTORY).getPool(tokenA, tokenB, stable);
-
-        uint256 valueIn = amountAInitial + IPool(pool).quote(tokenB, amountBInitial, 15);
 
         address factory = IPool(pool).factory();
         (uint256 amountAOut, uint256 amountBOut) = IRouter(AERODROME_ROUTER).quoteRemoveLiquidity(tokenA, tokenB, stable, factory, liquidity);
-
-        uint256 valueOut = amountAOut + leftoverA + IPool(pool).quote(tokenB, amountBOut + leftoverB, 15);
-
-        if (valueOut < valueIn) {
-            uint256 diffBips = (valueIn - valueOut) * BIPS / valueIn;
-            if (diffBips > slippageTolerance) revert AerodromeUtils_ExceededMaxSlippage();
+        
+        // Ensure it meets the minimum amounts, computed offchain using `quoteDepositLiquidity()`
+        if (amountAOut < amountAMin || amountBOut < amountBMin) {
+            revert AerodromeUtils_ExceededMaxSlippage();
         }
     }
 
@@ -288,20 +291,6 @@ library AerodromeUtils {
         
     }
 
-    /// @notice Calculates the expected output amount for a swap (in volatile pools)
-    /// @dev Uses the constant product formula (x * y = k) to calculate the output
-    /// @param amountIn The input amount
-    /// @param reserveIn The reserve of the input token
-    /// @param reserveOut The reserve of the output token
-    /// @return The calculated output amount
-    function calculateAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut, uint256 swapFee)
-        internal
-        pure
-        returns (uint256)
-    {
-        amountIn -= swapFee * amountIn / BIPS;
-        return (reserveOut * amountIn) / ( reserveIn + amountIn);
-    }
     /// @notice Calculates the absolute difference between two numbers
     /// @param a The first number
     /// @param b The second number
@@ -309,5 +298,96 @@ library AerodromeUtils {
 
     function diff(uint256 a, uint256 b) internal pure returns (uint256) {
         return a > b ? a - b : b - a;
+    }
+
+
+    // To be called offchain
+    function quoteDepositLiquidity(
+        address tokenA,
+        address tokenB,
+        bool stable,
+        uint256 amountAInitial, 
+        uint256 amountBInitial,
+        bool swapToBalanceTokens
+    ) internal view returns(uint256 amountAOut, uint256 amountBOut) {
+        uint256 amountALeft = amountAInitial;
+        uint256 amountBLeft = amountBInitial;
+
+        address pool = IPoolFactory(AERODROME_FACTORY).getPool(tokenA, tokenB, stable);
+        address factory = IPool(pool).factory();
+        IRouter aerodromeRouter = IRouter(AERODROME_ROUTER);
+
+        uint256 liquidityDeposited;
+        for (uint256 i = 0; i < 2; i++) {
+            (uint256[] memory amounts, bool sellTokenA) = quoteBalanceTokenRatio(
+                tokenA, tokenB, amountALeft, amountBLeft, stable
+            );
+
+            (amountALeft, amountBLeft) = updateAmountsIn(amountALeft, amountBLeft, sellTokenA, amounts);
+
+            (uint256 amountADeposited, uint256 amountBDeposited, uint256 liquidity) = aerodromeRouter.quoteAddLiquidity(
+                tokenA, tokenB, stable, factory, amountALeft, amountBLeft
+            );
+
+            amountALeft -= amountADeposited;
+            amountBLeft -= amountBDeposited;
+
+            liquidityDeposited += liquidity;
+
+            if (!stable) break; // only iterate once for volatile pairs
+        }
+
+
+        (amountAOut, amountBOut) 
+            = aerodromeRouter.quoteRemoveLiquidity(tokenA, tokenB, stable, factory, liquidityDeposited);
+    }
+
+    // Simulates balanceTokenRatio(), without any state changes
+    function quoteBalanceTokenRatio(
+        address tokenA,
+        address tokenB,
+        uint256 amountA,
+        uint256 amountB,
+        bool stable
+    ) internal view returns (uint256[] memory amounts, bool sellTokenA) {
+        uint256 aDecMultiplier = 10 ** (18 - IERC20Metadata(tokenA).decimals());
+        uint256 bDecMultiplier = 10 ** (18 - IERC20Metadata(tokenB).decimals());
+
+        (uint256 reserveA, uint256 reserveB) =
+            IRouter(AERODROME_ROUTER).getReserves(tokenA, tokenB, stable, IRouter(AERODROME_ROUTER).defaultFactory());
+
+        address pool = IPoolFactory(AERODROME_FACTORY).getPool(tokenA, tokenB, stable);
+        uint256 swapFee = IPoolFactory(AERODROME_FACTORY).getFee(pool, stable);
+
+        uint256 x = reserveA;
+        uint256 y = reserveB;
+        uint256 a = amountA;
+        uint256 b = amountB;
+
+        sellTokenA = (a == 0) ? false : (b == 0) ? true : mulDiv(a, RAY, b) > mulDiv(x, RAY, y);
+
+        uint256 tokensToSell;
+
+        if (!sellTokenA) {
+            tokensToSell = calculateAmountIn(y, x, b, a, bDecMultiplier, aDecMultiplier, swapFee, stable);
+        } else {
+            tokensToSell = calculateAmountIn(x, y, a, b, aDecMultiplier, bDecMultiplier, swapFee, stable);
+        }
+        if (tokensToSell == 0) {
+            return (new uint256[](2), sellTokenA);
+        }
+
+        // Quote the swap
+        IRouter.Route[] memory routes = new IRouter.Route[](1);
+        routes[0] = IRouter.Route(
+            sellTokenA ? tokenA : tokenB,
+            sellTokenA ? tokenB : tokenA,
+            stable,
+            IRouter(AERODROME_ROUTER).defaultFactory()
+        );
+
+        amounts = IRouter(AERODROME_ROUTER).getAmountsOut(tokensToSell, routes);
+
+        return (amounts, sellTokenA);
     }
 }
