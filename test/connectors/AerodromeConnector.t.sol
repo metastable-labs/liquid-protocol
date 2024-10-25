@@ -220,7 +220,7 @@ contract AerodromeConnectorTest is Test {
     // weth/usdc fuzz test
     function test_fuzz_weth_addLiquidity(uint256 amountA, uint256 amountB) public {
         uint256 amountADesired = bound(amountA, 1e4, INITIAL_BALANCE/10); // 100,000 USDC
-        uint256 amountBDesired = bound(amountA, 100, INITIAL_ETH_BALANCE/20); // 50 ETH
+        uint256 amountBDesired = bound(amountB, 1e13, INITIAL_ETH_BALANCE/20); // 50 ETH
         uint256 deadline = block.timestamp + 1 hours;
         uint256 slippage = 60; // 0.6%
 
@@ -491,7 +491,7 @@ contract AerodromeConnectorTest is Test {
         address tokenA = WETH;
         address tokenB = USDC;
         bool stable = false;
-        bool balanceRatio = false;
+        bool balanceRatio = true;
 
         (uint256 amountAMin, uint256 amountBMin) = 
             _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, balanceRatio, slippage);
@@ -518,10 +518,10 @@ contract AerodromeConnectorTest is Test {
 
     function testRemoveLiquidity() public {
         // First, add liquidity
-        testAddLiquidity();
+        tset_USDC_addLiquidity();
 
         // Now remove liquidity
-        address pair = IPoolFactory(AERODROME_FACTORY).getPool(TOKENA, WETH, false);
+        address pair = IPoolFactory(AERODROME_FACTORY).getPool(USDC, WETH, false);
         require(pair != address(0), "Pair does not exist");
 
         uint256 liquidity = IERC20(pair).balanceOf(ALICE);
@@ -542,7 +542,7 @@ contract AerodromeConnectorTest is Test {
         IERC20(pair).approve(address(connector), liquidity);
 
         bytes memory data = abi.encodeWithSelector(
-            IRouter.removeLiquidity.selector, TOKENA, WETH, stable, liquidity, amountAMin, amountBMin, ALICE, deadline
+            IRouter.removeLiquidity.selector, USDC, WETH, stable, liquidity, amountAMin, amountBMin, ALICE, deadline
         );
 
         try connector.execute(data) returns (bytes memory result) {
