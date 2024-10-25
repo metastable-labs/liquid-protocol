@@ -335,7 +335,7 @@ library AerodromeUtils {
         bool stable,
         uint256 amountAInitial, 
         uint256 amountBInitial,
-        bool swapToBalanceTokens
+        bool balanceTokenRatio
     ) internal view returns(uint256 amountAOut, uint256 amountBOut) {
         uint256 amountALeft = amountAInitial;
         uint256 amountBLeft = amountBInitial;
@@ -346,11 +346,15 @@ library AerodromeUtils {
 
         uint256 liquidityDeposited;
         for (uint256 i = 0; i < 2; i++) {
-            (uint256[] memory amounts, bool sellTokenA) = quoteBalanceTokenRatio(
-                tokenA, tokenB, amountALeft, amountBLeft, stable
-            );
 
-            (amountALeft, amountBLeft) = updateAmountsIn(amountALeft, amountBLeft, sellTokenA, amounts);
+            if (balanceTokenRatio) {
+                (uint256[] memory amounts, bool sellTokenA) = quoteBalanceTokenRatio(
+                    tokenA, tokenB, amountALeft, amountBLeft, stable
+                );
+
+                (amountALeft, amountBLeft) = updateAmountsIn(amountALeft, amountBLeft, sellTokenA, amounts);
+            }
+            
 
             (uint256 amountADeposited, uint256 amountBDeposited, uint256 liquidity) = aerodromeRouter.quoteAddLiquidity(
                 tokenA, tokenB, stable, factory, amountALeft, amountBLeft
@@ -361,7 +365,7 @@ library AerodromeUtils {
 
             liquidityDeposited += liquidity;
 
-            if (!stable) break; // only iterate once for volatile pairs
+            if (!stable || !balanceTokenRatio) break; // only iterate once for volatile pairs, or if not balancing token ratio
         }
 
 

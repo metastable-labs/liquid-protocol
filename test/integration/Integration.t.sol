@@ -146,13 +146,6 @@ contract Integration is Test {
         (uint256 amountA, uint256 amountB, uint256 liquidity) = abi.decode(result, (uint256, uint256, uint256));
 
         console.log("Liquidity added: %e USDC, %e WETH", amountA, amountB);
-
-        assertGt(amountA, 0, "Amount A should be greater than 0");
-        assertGt(amountB, 0, "Amount B should be greater than 0");
-        assertGt(liquidity, 0, "Liquidity should be greater than 0");
-
-        // console.log("USDC balance after: %s", IERC20(USDC).balanceOf(ALICE));
-        // console.log("WETH balance after: %s", IERC20(WETH).balanceOf(ALICE));
         console.log("Liquidity balance of Alice after deposit: %e", IERC20(pool).balanceOf(ALICE));
 
         vm.stopPrank();

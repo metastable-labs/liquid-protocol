@@ -122,7 +122,7 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
             uint256 amountBIn,
             uint256 amountAMin,
             uint256 amountBMin,
-            bool swapToBalanceTokens,
+            bool balanceTokenRatio,
             address to,
             uint256 deadline
         ) = abi.decode(data[4:], (address, address, bool, uint256, uint256, uint256, uint256, bool, address, uint256));
@@ -139,13 +139,17 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         uint256 amountALeft = amountAIn;
         uint256 amountBLeft = amountBIn;
         
+        // Balance token ratios
+
         for (uint256 i = 0; i < 2; i++) {
-            (uint256[] memory amounts, bool sellTokenA) = AerodromeUtils.balanceTokenRatio(
-                tokenA, tokenB, amountALeft, amountBLeft, stable
-            );
 
-            (amountALeft, amountBLeft) = AerodromeUtils.updateAmountsIn(amountALeft, amountBLeft, sellTokenA, amounts);
+            if (balanceTokenRatio) {
+                (uint256[] memory amounts, bool sellTokenA) = AerodromeUtils.balanceTokenRatio(
+                    tokenA, tokenB, amountALeft, amountBLeft, stable
+                );
 
+                (amountALeft, amountBLeft) = AerodromeUtils.updateAmountsIn(amountALeft, amountBLeft, sellTokenA, amounts);
+            }
             // Approve tokens to router
             IERC20(tokenA).approve(address(aerodromeRouter), amountALeft);
             IERC20(tokenB).approve(address(aerodromeRouter), amountBLeft);
@@ -162,7 +166,7 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
             liquidityDeposited += liquidity;
 
-            if (!stable) break; // only iterate once for volatile pairs
+            if (!stable || !balanceTokenRatio) break; // only iterate once for volatile pairs, or if not balancing token ratio
         }
         AerodromeUtils.checkPriceImpact(pool, ratioBefore);
 
