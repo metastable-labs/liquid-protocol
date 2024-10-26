@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: GNU
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IRouter} from "@aerodrome/contracts/contracts/interfaces/IRouter.sol";
 import {IPool} from "@aerodrome/contracts/contracts/interfaces/IPool.sol";
 import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/IPoolFactory.sol";
 
-import "../../../BaseConnector.sol";
-import "../common/constant.sol";
-import "./utils.sol";
+import {BaseConnector} from "../../../BaseConnector.sol";
+import {Constants} from "../common/constant.sol";
+import {AerodromeUtils} from "./utils.sol";
 import "./interface.sol";
 import "./events.sol";
 
@@ -39,14 +37,14 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
     receive() external payable {}
 
+    /// @notice Executes a liquidity action on Aerodrome 
+    /// @param data The encoded parameters for the desired action
+    /// @return bytes Encoded return data from the call
     function execute(bytes calldata data) external payable override returns (bytes memory) {
         return execute(data, msg.sender);
     } 
 
-    /// @notice Executes a function call on the Aerodrome protocol
-    /// @dev This function handles both addLiquidity and removeLiquidity operations
-    /// @param data The calldata for the function call
-    /// @return bytes The return data from the function call
+    /// @notice Allows specifying a caller (to be used by the plugin)
     function execute(bytes calldata data, address caller) public payable returns (bytes memory) {
         // Extract the original caller (smart wallet) address from the end of the data
         address originalCaller = msg.sender == _plugin ? caller : msg.sender;
@@ -68,6 +66,10 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         revert InvalidSelector();
     }
 
+    /// @notice Swaps exact tokens for tokens on the Aerodrome protocol
+    /// @param data The encoded parameters for the desired action
+    /// @param caller The address of the original caller
+    /// @return amounts The amounts of tokens received for each step of the swap
     function _swapExactTokensForTokens(bytes calldata data, address caller)
         internal
         returns (uint256[] memory amounts)
@@ -105,7 +107,7 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
     /// @notice Deposits liquidity into an Aerodrome pool
     /// @dev Handles the process of adding liquidity, including price checks and token swaps
-    /// @param data The calldata containing function parameters
+    /// @param data The encoded parameters for the desired action
     /// @param caller The original caller of this function
     /// @return amountAUsed The amount of tokenA actually deposited
     /// @return amountBUsed The amount of tokenB actually deposited
@@ -140,7 +142,6 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         uint256 amountBLeft = amountBIn;
         
         // Balance token ratios
-
         for (uint256 i = 0; i < 2; i++) {
 
             if (balanceTokenRatio) {
@@ -179,8 +180,8 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
     /// @notice Removes liquidity from an Aerodrome pool
     /// @dev Handles the process of removing liquidity and receiving tokens
-    /// @param data The calldata containing function parameters
-    /// @param caller The original caller of this function
+    /// @param data The encoded parameters for the desired action
+    /// @param caller The address of the original caller
     /// @return amountA The amount of tokenA received
     /// @return amountB The amount of tokenB received
     function _removeBasicLiquidity(bytes calldata data, address caller)
@@ -213,7 +214,8 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     }
 
     /// @notice Deposits LP tokens into a gauge
-    /// @param data The calldata containing function parameters
+    /// @param data The encoded parameters for the desired action
+    /// @param caller The address of the original caller
     /// @return bytes The encoded result of the deposit
     function _depositToGauge(bytes calldata data, address caller) internal returns (bytes memory) {
         (address gaugeAddress, uint256 amount) = abi.decode(data[4:], (address, uint256));
@@ -229,6 +231,7 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         return abi.encode(amount, caller);
     }
 
+    /// @notice Transfers tokens from the caller to the contract
     function _receiveTokensFromCaller(address tokenA, uint256 amountA, address tokenB, uint256 amountB, address caller) internal {
         if (amountA > 0) {
             if (tokenA == WETH && msg.value > 0) {
@@ -252,6 +255,15 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         }
     }
 
+    /// @notice Quotes the expected amounts of token A and token B to deposit in a liquidity pool
+    /// @param tokenA The address of token A
+    /// @param tokenB The address of token B
+    /// @param stable Indicates whether the pair is a stable pair
+    /// @param amountA The amount of token A being deposited
+    /// @param amountB The amount of token B being deposited
+    /// @param balanceTokenRatio Indicates whether to balance the token ratio with a swap
+    /// @return amountAOut The amount of token A expected to be deposited
+    /// @return amountBOut The amount of token B expected to be deposited
     function quoteDepositLiquidity(
         address tokenA, 
         address tokenB, 

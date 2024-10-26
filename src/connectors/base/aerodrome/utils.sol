@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GNU
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IRouter} from "@aerodrome/contracts/contracts/interfaces/IRouter.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IPool} from "@aerodrome/contracts/contracts/interfaces/IPool.sol";
@@ -102,7 +102,7 @@ library AerodromeUtils {
 
     function reserveRatio(address pool) internal view returns(uint256) {
         (uint256 reserveA, uint256 reserveB, ) = IPool(pool).getReserves();
-        return reserveA * RAY / reserveB;
+        return mulDiv(reserveA, RAY, reserveB);
     }
 
     function checkPriceImpact(address pool, uint256 ratioBefore) internal view returns(uint256) {
@@ -327,8 +327,6 @@ library AerodromeUtils {
         return a > b ? a - b : 0;
     }
 
-
-    // To be called offchain
     function quoteDepositLiquidity(
         address tokenA,
         address tokenB,
