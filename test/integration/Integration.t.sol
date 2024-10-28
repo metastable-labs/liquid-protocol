@@ -37,7 +37,7 @@ contract Integration is Test {
 
         plugin = new ConnectorPlugin(address(registry));
         connector = new AerodromeConnector("AerodromeConnector", 1, address(plugin));
-        registry.addConnector(address(connector), "AerodromeConnector", 1);
+        registry.addConnector(address(connector), "AerodromeConnector");
 
         deal(ALICE, INITIAL_ETH_BALANCE);
         deal(USDC, ALICE, INITIAL_BALANCE);

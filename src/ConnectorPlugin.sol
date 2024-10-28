@@ -32,8 +32,7 @@ contract ConnectorPlugin {
     receive() external payable {}
 
     function execute(address _connector, bytes calldata _data) external payable returns (bytes memory) {
-        uint256 latestVersion = registry.getLatestConnectorVersion(_connector);
-        if (!registry.isApprovedConnector(_connector, latestVersion)) {
+        if (!registry.isApprovedConnector(_connector)) {
             revert ConnectorNotApproved(_connector);
         }
 

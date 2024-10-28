@@ -40,5 +40,9 @@ contract MockConnector {
         revert("MockConnector: Intentional failure");
     }
 
+    function getVersion() external view returns(uint256 version) {
+        version = 1;
+    }
+
     receive() external payable {}
 }

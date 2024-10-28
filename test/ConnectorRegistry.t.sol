@@ -4,6 +4,9 @@ pragma solidity ^0.8.12;
 import "forge-std/Test.sol";
 import "../src/ConnectorRegistry.sol";
 
+contract MockConnector {
+    uint256 public getVersion = 1;
+}
 contract ConnectorRegistryTest is Test {
     ConnectorRegistry public registry;
     address public owner;
@@ -14,141 +17,73 @@ contract ConnectorRegistryTest is Test {
     function setUp() public {
         registry = new ConnectorRegistry();
         owner = address(this);
-        testConnector1 = address(0x1);
-        testConnector2 = address(0x2);
-        testConnector3 = address(0x3);
+        testConnector1 = address(new MockConnector());
+        testConnector2 = address(new MockConnector());
+        testConnector3 = address(new MockConnector());
     }
 
     function testAddConnector() public {
-        registry.addConnector(testConnector1, "TestConnector1", 1);
+        registry.addConnector(testConnector1, "TestConnector1");
 
-        (string memory name, uint256 version, bool isActive) = registry.connectors(testConnector1, 1);
+        (string memory name, uint256 version, bool isActive) = registry.connectors(testConnector1);
         assertEq(name, "TestConnector1");
         assertEq(version, 1);
         assertTrue(isActive);
-        assertEq(registry.getLatestConnectorVersion(testConnector1), 1);
 
         assertEq(registry.connectorList(0), testConnector1);
         assertEq(registry.getConnectorCount(), 1);
     }
 
     function testAddMultipleConnectors() public {
-        registry.addConnector(testConnector1, "TestConnector1", 1);
-        registry.addConnector(testConnector2, "TestConnector2", 1);
-        registry.addConnector(testConnector3, "TestConnector3", 1);
+        registry.addConnector(testConnector1, "TestConnector1");
+        registry.addConnector(testConnector2, "TestConnector2");
+        registry.addConnector(testConnector3, "TestConnector3");
 
         assertEq(registry.getConnectorCount(), 3);
         assertEq(registry.connectorList(0), testConnector1);
         assertEq(registry.connectorList(1), testConnector2);
         assertEq(registry.connectorList(2), testConnector3);
 
-        assertTrue(registry.isApprovedConnector(testConnector1, 1));
-        assertTrue(registry.isApprovedConnector(testConnector2, 1));
-        assertTrue(registry.isApprovedConnector(testConnector3, 1));
-    }
-
-    function testAddMultipleVersionsSameConnector() public {
-        registry.addConnector(testConnector1, "TestConnector1v1", 1);
-        registry.addConnector(testConnector1, "TestConnector1v2", 2);
-        registry.addConnector(testConnector1, "TestConnector1v3", 3);
-
-        assertEq(registry.getConnectorCount(), 1);
-        assertEq(registry.connectorList(0), testConnector1);
-
-        assertTrue(registry.isApprovedConnector(testConnector1, 1));
-        assertTrue(registry.isApprovedConnector(testConnector1, 2));
-        assertTrue(registry.isApprovedConnector(testConnector1, 3));
-        assertEq(registry.getLatestConnectorVersion(testConnector1), 3);
+        assertTrue(registry.isApprovedConnector(testConnector1));
+        assertTrue(registry.isApprovedConnector(testConnector2));
+        assertTrue(registry.isApprovedConnector(testConnector3));
     }
 
     function test_RevertWhenAddingExistingConnector() public {
-        registry.addConnector(testConnector1, "TestConnector1", 1);
+        registry.addConnector(testConnector1, "TestConnector1");
         vm.expectRevert(abi.encodeWithSelector(ConnectorRegistry.ConnectorAlreadyExists.selector, testConnector1, 1));
-        registry.addConnector(testConnector1, "TestConnector1", 1);
-    }
-
-    function test_RevertWhenAddingLowerVersion() public {
-        registry.addConnector(testConnector1, "TestConnector1", 2);
-        vm.expectRevert(abi.encodeWithSelector(ConnectorRegistry.InvalidVersionUpdate.selector, testConnector1, 2, 1));
-        registry.addConnector(testConnector1, "TestConnector1", 1);
+        registry.addConnector(testConnector1, "TestConnector1");
     }
 
     function test_RevertWhenUpdatingNonExistentConnector() public {
         vm.expectRevert(
-            abi.encodeWithSelector(ConnectorRegistry.ConnectorVersionDoesNotExist.selector, testConnector2, 1)
+            abi.encodeWithSelector(ConnectorRegistry.ConnectorDoesNotExist.selector, testConnector2)
         );
-        registry.updateConnector(testConnector2, "NonExistent", 1);
+        registry.updateConnectorName(testConnector2, "NonExistent");
     }
 
     function test_RevertWhenDeactivatingNonActiveConnector() public {
-        registry.addConnector(testConnector1, "TestConnector1", 1);
-        registry.deactivateConnector(testConnector1, 1);
-        vm.expectRevert(abi.encodeWithSelector(ConnectorRegistry.ConnectorNotActive.selector, testConnector1, 1));
-        registry.deactivateConnector(testConnector1, 1);
-    }
-
-    function testUpdateConnector() public {
-        registry.addConnector(testConnector1, "TestConnector1", 1);
-        registry.updateConnector(testConnector1, "UpdatedConnector1", 1);
-
-        (string memory name, uint256 version, bool isActive) = registry.connectors(testConnector1, 1);
-        assertEq(name, "UpdatedConnector1");
-        assertEq(version, 1);
-        assertTrue(isActive);
+        registry.addConnector(testConnector1, "TestConnector1");
+        registry.updateConnectorStatus(testConnector1, false);
+        vm.expectRevert(abi.encodeWithSelector(ConnectorRegistry.StatusNotChanged.selector));
+        registry.updateConnectorStatus(testConnector1, false);
     }
 
     function testDeactivateConnector() public {
-        registry.addConnector(testConnector1, "TestConnector1", 1);
-        registry.deactivateConnector(testConnector1, 1);
+        registry.addConnector(testConnector1, "TestConnector1");
+        registry.updateConnectorStatus(testConnector1, false);
 
-        (,, bool isActive) = registry.connectors(testConnector1, 1);
+        (,, bool isActive) = registry.connectors(testConnector1);
         assertFalse(isActive);
     }
 
     function testIsApprovedConnector() public {
-        registry.addConnector(testConnector1, "TestConnector1", 1);
-        assertTrue(registry.isApprovedConnector(testConnector1, 1));
+        registry.addConnector(testConnector1, "TestConnector1");
+        assertTrue(registry.isApprovedConnector(testConnector1));
 
-        registry.deactivateConnector(testConnector1, 1);
-        assertFalse(registry.isApprovedConnector(testConnector1, 1));
-    }
+        registry.updateConnectorStatus(testConnector1, false);
+        assertFalse(registry.isApprovedConnector(testConnector1));
+    
 
-    function testGetLatestConnectorVersion() public {
-        registry.addConnector(testConnector1, "TestConnector1", 1);
-        assertEq(registry.getLatestConnectorVersion(testConnector1), 1);
-
-        registry.addConnector(testConnector1, "TestConnector1v2", 2);
-        assertEq(registry.getLatestConnectorVersion(testConnector1), 2);
-    }
-
-    function testMultipleVersions() public {
-        registry.addConnector(testConnector1, "TestConnector1v1", 1);
-        registry.addConnector(testConnector1, "TestConnector1v2", 2);
-        registry.addConnector(testConnector1, "TestConnector1v3", 3);
-
-        assertTrue(registry.isApprovedConnector(testConnector1, 1));
-        assertTrue(registry.isApprovedConnector(testConnector1, 2));
-        assertTrue(registry.isApprovedConnector(testConnector1, 3));
-        assertEq(registry.getLatestConnectorVersion(testConnector1), 3);
-
-        registry.deactivateConnector(testConnector1, 2);
-        assertTrue(registry.isApprovedConnector(testConnector1, 1));
-        assertFalse(registry.isApprovedConnector(testConnector1, 2));
-        assertTrue(registry.isApprovedConnector(testConnector1, 3));
-    }
-
-    function testConnectorListConsistency() public {
-        registry.addConnector(testConnector1, "TestConnector1", 1);
-        registry.addConnector(testConnector2, "TestConnector2", 1);
-        registry.addConnector(testConnector3, "TestConnector3", 1);
-
-        assertEq(registry.getConnectorCount(), 3);
-        assertEq(registry.connectorList(0), testConnector1);
-        assertEq(registry.connectorList(1), testConnector2);
-        assertEq(registry.connectorList(2), testConnector3);
-
-        // Adding a new version doesn't change the list
-        registry.addConnector(testConnector1, "TestConnector1v2", 2);
-        assertEq(registry.getConnectorCount(), 3);
     }
 }

@@ -15,18 +15,20 @@ abstract contract BaseConnector is IConnector {
     /// @notice Version of the connector
     uint256 private immutable _version;
 
-    /// @notice Address of the protocol this connector interacts with
-    address private immutable _protocolAddress;
-
     /// @notice Address of the connector plugin
     address public immutable _plugin;
 
+
+
+    error InvalidVersionNumber();
     /**
      * @dev Constructor to set the name, version, and protocol address of the connector
      * @param name_ Name of the connector
      * @param version_ Version of the connector
      */
     constructor(string memory name_, uint256 version_, address plugin_) {
+        if (version_ == 0) revert InvalidVersionNumber();
+        
         _name = keccak256(bytes(name_));
         _version = version_;
         _plugin = plugin_;

@@ -21,7 +21,7 @@ contract ConnectorPluginTest is Test {
         approvedConnector = new MockConnector();
         unapprovedConnector = new MockConnector();
 
-        registry.addConnector(address(approvedConnector), "ApprovedConnector", 1);
+        registry.addConnector(address(approvedConnector), "ApprovedConnector");
     }
 
 
