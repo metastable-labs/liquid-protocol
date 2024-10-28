@@ -21,10 +21,10 @@ contract ContractDeploymentScript {
         plugin = new ConnectorPlugin(address(registry));
 
         // Deploy AerodromeConnector
-        aerodromeConnector = new AerodromeConnector("AerodromeConnector", 1);
+        aerodromeConnector = new AerodromeConnector("AerodromeConnector", 1, address(plugin));
 
         // Add AerodromeConnector to the registry
-        registry.addConnector(address(aerodromeConnector), "AerodromeConnector", 1);
+        registry.addConnector(address(aerodromeConnector), "AerodromeConnector");
 
         // Emit event with deployed contract addresses
         emit ContractsDeployed(address(registry), address(plugin), address(aerodromeConnector));

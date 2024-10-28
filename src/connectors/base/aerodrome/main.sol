@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: GNU
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IRouter} from "@aerodrome/contracts/contracts/interfaces/IRouter.sol";
 import {IPool} from "@aerodrome/contracts/contracts/interfaces/IPool.sol";
 import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/IPoolFactory.sol";
 
-import "../../../BaseConnector.sol";
-import "../common/constant.sol";
-import "./utils.sol";
+import {BaseConnector} from "../../../BaseConnector.sol";
+import {Constants} from "../common/constant.sol";
+import {AerodromeUtils} from "./utils.sol";
 import "./interface.sol";
 import "./events.sol";
 
@@ -26,38 +24,52 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     error SlippageExceeded();
     error UnauthorizedCaller();
 
+    error IncorrectETHAmount();
+    error PoolDoesNotExist();
+
     /// @notice Initializes the AerodromeConnector
     /// @param name Name of the connector
     /// @param version Version of the connector
-    constructor(string memory name, uint256 version) BaseConnector(name, version) {
+    constructor(string memory name, uint256 version, address plugin) BaseConnector(name, version, plugin) {
         aerodromeRouter = IRouter(AERODROME_ROUTER);
         aerodromeFactory = IPoolFactory(AERODROME_FACTORY);
     }
 
     receive() external payable {}
 
-    /// @notice Executes a function call on the Aerodrome protocol
-    /// @dev This function handles both addLiquidity and removeLiquidity operations
-    /// @param data The calldata for the function call
-    /// @return bytes The return data from the function call
+    /// @notice Executes a liquidity action on Aerodrome 
+    /// @param data The encoded parameters for the desired action
+    /// @return bytes Encoded return data from the call
     function execute(bytes calldata data) external payable override returns (bytes memory) {
+        return execute(data, msg.sender);
+    } 
+
+    /// @notice Allows specifying a caller (to be used by the plugin)
+    function execute(bytes calldata data, address caller) public payable returns (bytes memory) {
+        // Extract the original caller (smart wallet) address from the end of the data
+        address originalCaller = msg.sender == _plugin ? caller : msg.sender;
+        
         bytes4 selector = bytes4(data[:4]);
 
         if (selector == aerodromeRouter.addLiquidity.selector) {
-            (uint256 amountA, uint256 amountB, uint256 liquidity) = _depositBasicLiquidity(data, msg.sender);
+            (uint256 amountA, uint256 amountB, uint256 liquidity) = _depositBasicLiquidity(data, originalCaller);
             return abi.encode(amountA, amountB, liquidity);
         } else if (selector == aerodromeRouter.removeLiquidity.selector) {
-            (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(data, msg.sender);
+            (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(data, originalCaller);
             return abi.encode(amountA, amountB);
         } else if (selector == aerodromeRouter.swapExactTokensForTokens.selector) {
-            uint256[] memory amounts = _swapExactTokensForTokens(data, msg.sender);
+            uint256[] memory amounts = _swapExactTokensForTokens(data, originalCaller);
             return abi.encode(amounts);
         } else if (selector == IGauge.deposit.selector) {
-            return _depositToGauge(data);
+            return _depositToGauge(data, originalCaller);
         }
         revert InvalidSelector();
     }
 
+    /// @notice Swaps exact tokens for tokens on the Aerodrome protocol
+    /// @param data The encoded parameters for the desired action
+    /// @param caller The address of the original caller
+    /// @return amounts The amounts of tokens received for each step of the swap
     function _swapExactTokensForTokens(bytes calldata data, address caller)
         internal
         returns (uint256[] memory amounts)
@@ -68,24 +80,20 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         if (block.timestamp > deadline) revert DeadlineExpired();
 
         address tokenIn = routes[0].from;
+
+        _receiveTokensFromCaller(tokenIn, amountIn, address(0), 0, caller);
+
+        IERC20(tokenIn).approve(address(aerodromeRouter), amountIn);
+
         address tokenOut = routes[routes.length - 1].to;
 
-        // Calculate expected output
         uint256[] memory expectedAmounts = aerodromeRouter.getAmountsOut(amountIn, routes);
         uint256 expectedAmountOut = expectedAmounts[expectedAmounts.length - 1];
 
-        // Check if the expected output meets the minimum return amount
         if (expectedAmountOut < minReturnAmount) {
             revert SlippageExceeded();
         }
 
-        // Transfer tokens from caller to this contract
-        IERC20(tokenIn).transferFrom(caller, address(this), amountIn);
-
-        // Approve router to spend tokens
-        IERC20(tokenIn).approve(address(aerodromeRouter), amountIn);
-
-        // Perform the swap
         amounts = aerodromeRouter.swapExactTokensForTokens(amountIn, minReturnAmount, routes, to, deadline);
 
         if (amounts[amounts.length - 1] < minReturnAmount) {
@@ -99,91 +107,81 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
     /// @notice Deposits liquidity into an Aerodrome pool
     /// @dev Handles the process of adding liquidity, including price checks and token swaps
-    /// @param data The calldata containing function parameters
+    /// @param data The encoded parameters for the desired action
     /// @param caller The original caller of this function
-    /// @return amountAOut The amount of tokenA actually deposited
-    /// @return amountBOut The amount of tokenB actually deposited
-    /// @return liquidity The amount of liquidity tokens received
+    /// @return amountAUsed The amount of tokenA actually deposited
+    /// @return amountBUsed The amount of tokenB actually deposited
+    /// @return liquidityDeposited The amount of liquidity tokens received
     function _depositBasicLiquidity(bytes calldata data, address caller)
         internal
-        returns (uint256 amountAOut, uint256 amountBOut, uint256 liquidity)
+        returns (uint256 amountAUsed, uint256 amountBUsed, uint256 liquidityDeposited)
     {
         (
             address tokenA,
             address tokenB,
             bool stable,
-            uint256 amountADesired,
-            uint256 amountBDesired,
+            uint256 amountAIn,
+            uint256 amountBIn,
             uint256 amountAMin,
             uint256 amountBMin,
+            bool balanceTokenRatio,
             address to,
             uint256 deadline
-        ) = abi.decode(data[4:], (address, address, bool, uint256, uint256, uint256, uint256, address, uint256));
+        ) = abi.decode(data[4:], (address, address, bool, uint256, uint256, uint256, uint256, bool, address, uint256));
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
-        // Transfer tokens from msg.sender to this contract
-        IERC20(tokenA).transferFrom(caller, address(this), amountADesired);
-        IERC20(tokenB).transferFrom(caller, address(this), amountBDesired);
-
-        require(IERC20(tokenA).balanceOf(address(this)) >= amountADesired, "Insufficient tokenA balance");
-        require(IERC20(tokenB).balanceOf(address(this)) >= amountBDesired, "Insufficient tokenB balance");
-
-        // Check price ratio
-        AerodromeUtils.checkPriceRatio(
-            tokenA,
-            tokenB,
-            amountADesired,
-            amountBDesired,
-            stable,
-            address(aerodromeRouter),
-            address(aerodromeFactory),
-            LIQ_SLIPPAGE
-        );
-
-        // Balance token ratio before depositing
-        (uint256[] memory amounts, bool sellTokenA) = AerodromeUtils.balanceTokenRatio(
-            tokenA, tokenB, amountADesired, amountBDesired, stable, address(aerodromeRouter)
-        );
-
-        // Update token amounts after swaps
-        if (sellTokenA) {
-            amountADesired -= amounts[0];
-            amountBDesired += amounts[1];
-        } else {
-            amountBDesired -= amounts[0];
-            amountADesired += amounts[1];
-        }
-
-        // For volatile pairs: calculate minimum amount out with 0.5% slippage
-        if (!stable) {
-            amountAMin = AerodromeUtils.mulDiv(amountADesired, 10_000 - LIQ_SLIPPAGE, 10_000);
-            amountBMin = AerodromeUtils.mulDiv(amountBDesired, 10_000 - LIQ_SLIPPAGE, 10_000);
-        }
-
-        // Get the pool address
         address pool = aerodromeFactory.getPool(tokenA, tokenB, stable);
-        if (pool == address(0)) revert("Pool does not exist");
+        if (pool == address(0)) revert PoolDoesNotExist();
+         
+        _receiveTokensFromCaller(tokenA, amountAIn, tokenB, amountBIn, caller);
 
-        // Add liquidity to the basic pool
-        (amountAOut, amountBOut, liquidity) = aerodromeRouter.addLiquidity(
-            tokenA, tokenB, stable, amountADesired, amountBDesired, amountAMin, amountBMin, to, deadline
-        );
+        uint256 ratioBefore = AerodromeUtils.reserveRatio(pool);
+                
+        uint256 amountALeft = amountAIn;
+        uint256 amountBLeft = amountBIn;
+        
+        // Balance token ratios
+        for (uint256 i = 0; i < 2; i++) {
 
-        if (liquidity == 0) revert InsufficientLiquidity();
+            if (balanceTokenRatio) {
+                (uint256[] memory amounts, bool sellTokenA) = AerodromeUtils.balanceTokenRatio(
+                    tokenA, tokenB, amountALeft, amountBLeft, stable
+                );
 
-        uint256 leftoverA = amountADesired - amountAOut;
-        uint256 leftoverB = amountBDesired - amountBOut;
+                (amountALeft, amountBLeft) = AerodromeUtils.updateAmountsIn(amountALeft, amountBLeft, sellTokenA, amounts);
+            }
+            // Approve tokens to router
+            IERC20(tokenA).approve(address(aerodromeRouter), amountALeft);
+            IERC20(tokenB).approve(address(aerodromeRouter), amountBLeft);
 
-        AerodromeUtils.returnLeftovers(tokenA, tokenB, leftoverA, leftoverB, msg.sender, WETH_ADDRESS);
+            (uint256 amountADeposited, uint256 amountBDeposited, uint256 liquidity) = aerodromeRouter.addLiquidity(
+                tokenA, tokenB, stable, amountALeft, amountBLeft, 0, 0, to, deadline // 0 amountOutMin because we do checkValueOut()
+            );
 
-        emit LiquidityAdded(tokenA, tokenB, amountAOut, amountBOut, liquidity);
+            amountALeft -= amountADeposited;
+            amountBLeft -= amountBDeposited;
+
+            amountAUsed += amountADeposited;
+            amountBUsed += amountBDeposited;
+
+            liquidityDeposited += liquidity;
+
+            if (!stable || !balanceTokenRatio) break; // only iterate once for volatile pairs, or if not balancing token ratio
+        }
+        AerodromeUtils.checkPriceImpact(pool, ratioBefore);
+
+        AerodromeUtils.checkValueOut(liquidityDeposited, tokenA, tokenB, stable, amountAMin, amountBMin, amountAIn, amountBIn);
+
+        AerodromeUtils.returnLeftovers(tokenA, tokenB, amountALeft, amountBLeft, caller);
+        
+        emit LiquidityAdded(tokenA, tokenB, amountAUsed, amountBUsed, liquidityDeposited);
     }
 
     /// @notice Removes liquidity from an Aerodrome pool
     /// @dev Handles the process of removing liquidity and receiving tokens
-    /// @param data The calldata containing function parameters
-    /// @param caller The original caller of this function
+    /// @param data The encoded parameters for the desired action
+    /// @param caller The address of the original caller
     /// @return amountA The amount of tokenA received
     /// @return amountB The amount of tokenB received
     function _removeBasicLiquidity(bytes calldata data, address caller)
@@ -203,44 +201,77 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
-        // Get the pair address
-        address pair = aerodromeFactory.getPool(tokenA, tokenB, stable);
-        if (pair == address(0)) revert("Pair does not exist");
+        address pool = aerodromeFactory.getPool(tokenA, tokenB, stable);
+        if (pool == address(0)) revert PoolDoesNotExist();
 
-        // Approve the router to spend the liquidity tokens
-        IERC20(pair).approve(address(aerodromeRouter), liquidity);
-
-        // Transfer liquidity tokens from the smart wallet to this contract
-        IERC20(pair).transferFrom(caller, address(this), liquidity);
+        IERC20(pool).transferFrom(caller, address(this), liquidity);
+        IERC20(pool).approve(address(aerodromeRouter), liquidity);
 
         (amountA, amountB) =
             aerodromeRouter.removeLiquidity(tokenA, tokenB, stable, liquidity, amountAMin, amountBMin, to, deadline);
-
-        if (amountA < amountAMin || amountB < amountBMin) {
-            revert SlippageExceeded();
-        }
 
         emit LiquidityRemoved(tokenA, tokenB, amountA, amountB, liquidity);
     }
 
     /// @notice Deposits LP tokens into a gauge
-    /// @param data The calldata containing function parameters
+    /// @param data The encoded parameters for the desired action
+    /// @param caller The address of the original caller
     /// @return bytes The encoded result of the deposit
-    function _depositToGauge(bytes calldata data) internal returns (bytes memory) {
+    function _depositToGauge(bytes calldata data, address caller) internal returns (bytes memory) {
         (address gaugeAddress, uint256 amount) = abi.decode(data[4:], (address, uint256));
 
-        // Get the LP token address from the gauge
         address lpToken = IGauge(gaugeAddress).stakingToken();
 
-        // Transfer LP tokens from the caller to this contract
-        IERC20(lpToken).transferFrom(msg.sender, address(this), amount);
-
-        // Approve the gauge to spend LP tokens
+        IERC20(lpToken).transferFrom(caller, address(this), amount);
         IERC20(lpToken).approve(gaugeAddress, amount);
 
-        IGauge(gaugeAddress).deposit(amount, msg.sender);
+        IGauge(gaugeAddress).deposit(amount, caller);
 
         emit LPTokenStaked(gaugeAddress, amount);
-        return abi.encode(amount, msg.sender);
+        return abi.encode(amount, caller);
+    }
+
+    /// @notice Transfers tokens from the caller to the contract
+    function _receiveTokensFromCaller(address tokenA, uint256 amountA, address tokenB, uint256 amountB, address caller) internal {
+        if (amountA > 0) {
+            if (tokenA == WETH && msg.value > 0) {
+                if (msg.value != amountA) revert IncorrectETHAmount();
+
+                IWETH(WETH).deposit{value: msg.value}();
+            }
+            else {
+                IERC20(tokenA).transferFrom(caller, address(this), amountA);
+            }
+        }
+        if (amountB > 0) {
+            if (tokenB == WETH && msg.value > 0) {
+                if (msg.value != amountB) revert IncorrectETHAmount();
+
+                IWETH(WETH).deposit{value: msg.value}();
+            }
+            else {
+                IERC20(tokenB).transferFrom(caller, address(this), amountB);
+            }
+        }
+    }
+
+    /// @notice Quotes the expected amounts of token A and token B to deposit in a liquidity pool
+    /// @param tokenA The address of token A
+    /// @param tokenB The address of token B
+    /// @param stable Indicates whether the pair is a stable pair
+    /// @param amountA The amount of token A being deposited
+    /// @param amountB The amount of token B being deposited
+    /// @param balanceTokenRatio Indicates whether to balance the token ratio with a swap
+    /// @return amountAOut The amount of token A expected to be deposited
+    /// @return amountBOut The amount of token B expected to be deposited
+    function quoteDepositLiquidity(
+        address tokenA, 
+        address tokenB, 
+        bool stable, 
+        uint256 amountA, 
+        uint256 amountB,
+        bool balanceTokenRatio
+    ) external view returns(uint256 amountAOut, uint256 amountBOut) {
+        (amountAOut, amountBOut) =  AerodromeUtils.quoteDepositLiquidity(tokenA, tokenB, stable, amountA, amountB, balanceTokenRatio);
     }
 }
