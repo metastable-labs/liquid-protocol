@@ -6,12 +6,7 @@ import "./contracts.s.sol";
 
 contract DeployScript is Script {
     function run() external {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        vm.startBroadcast(deployerPrivateKey);
-
         ContractDeploymentScript deploymentScript = new ContractDeploymentScript();
         deploymentScript.deploy();
-
-        vm.stopBroadcast();
     }
 }
