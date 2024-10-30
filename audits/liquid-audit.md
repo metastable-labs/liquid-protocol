@@ -10,9 +10,9 @@ Full audit portfolio: [https://github.com/0xjuaan](https://github.com/0xjuaan)
 
 ### Audit Details
 
-The Liquid Protocol aims to improve the DeFi user experience by leveraging smart wallets and a seamless mobile app interface.
+The Liquid Protocol (by the Supermigrate team) aims to improve the DeFi user experience by leveraging smart wallets and a seamless mobile app interface.
 
-This audit focuses on the alpha version of the Liquid Protocol (by the Supermigrate team), which provides tools for users to manage Aerodrome liquidity positions in **basic** Aerodrome pools (UniswapV2 styled pools). 
+This audit focuses on the alpha version of the Liquid Protocol, which provides tools for users to manage Aerodrome liquidity positions in **basic** Aerodrome pools (UniswapV2 styled pools). 
 
 This audit additionally includes extensive forked integration testing, and application of fixes. 
 
@@ -399,7 +399,7 @@ The formula used in `calculateAmountIn()` when balancing token ratios assumes th
 Add a conditional branch for when `swapFee` is equal to 100 basis points. The following simultaneous equation will need to be solved again (to calculate `tokensToSell`) using the new `fee` of 100 bips:
 
 1. $\frac{amountA -tokensToSell}{amountB+tokensReceived} = \frac{reserveA+tokensToSell}{reserveB-tokensReceived}$
-2. $tokensReceived = \frac{tokensToSell * reserveB * (10000 - fee)}{10000*x + (10000-fee)*s}$
+2. $tokensReceived = \frac{tokensToSell * reserveB * (10000 - fee)}{10000*x + (10000-fee)*tokensToSell}$
 
 ---
 
