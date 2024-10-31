@@ -24,7 +24,6 @@ contract ConnectorPluginTest is Test {
         registry.addConnector(address(approvedConnector), "ApprovedConnector");
     }
 
-
     function testExecuteUnapprovedConnector() public {
         bytes memory data = abi.encodeWithSignature("mockFunction(uint256)", 42);
         vm.prank(ALICE);
@@ -52,8 +51,6 @@ contract ConnectorPluginTest is Test {
         plugin.execute(address(approvedConnector), data);
     }
 
-
-
     function testExecuteWithRevertFlag() public {
         approvedConnector.setShouldRevert(true);
         bytes memory data = abi.encodeWithSignature("mockFunction(uint256)", 42);
@@ -63,7 +60,6 @@ contract ConnectorPluginTest is Test {
         );
         plugin.execute(address(approvedConnector), data);
     }
-
 
     receive() external payable {}
 }

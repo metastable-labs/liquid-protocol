@@ -14,4 +14,4 @@ export DEPLOYER_PUB=$DEPLOYER_PUB
 
 read -p "Press enter to begin the deployment..."
 
-forge script script/deploy.s.sol:DeployScript --rpc-url $RPC_URL --broadcast -vvvv --private-key $PRIVATE_KEY --verify --delay 15
+forge script script/contracts.s.sol:ContractDeploymentScript --rpc-url $RPC_URL --broadcast -vvvv --private-key $PRIVATE_KEY --verify --delay 15

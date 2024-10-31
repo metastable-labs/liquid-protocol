@@ -38,13 +38,10 @@ library AerodromeUtils {
     /// @return amounts An array containing the swapped amounts
     /// @return sellTokenA Boolean indicating whether tokenA was sold in the swap
 
-    function balanceTokenRatio(
-        address tokenA,
-        address tokenB,
-        uint256 amountA,
-        uint256 amountB,
-        bool stable
-    ) internal returns (uint256[] memory amounts, bool sellTokenA) {
+    function balanceTokenRatio(address tokenA, address tokenB, uint256 amountA, uint256 amountB, bool stable)
+        internal
+        returns (uint256[] memory amounts, bool sellTokenA)
+    {
         uint256 aDecMultiplier = 10 ** (18 - IERC20Metadata(tokenA).decimals());
         uint256 bDecMultiplier = 10 ** (18 - IERC20Metadata(tokenB).decimals());
 
@@ -83,14 +80,17 @@ library AerodromeUtils {
         );
 
         IERC20(sellTokenA ? tokenA : tokenB).approve(AERODROME_ROUTER, tokensToSell);
-        amounts = IRouter(AERODROME_ROUTER).swapExactTokensForTokens(
-            tokensToSell, 0, routes, address(this), block.timestamp
-        );
+        amounts =
+            IRouter(AERODROME_ROUTER).swapExactTokensForTokens(tokensToSell, 0, routes, address(this), block.timestamp);
 
         return (amounts, sellTokenA);
     }
 
-    function updateAmountsIn(uint256 a, uint256 b, bool sellTokenA, uint256[] memory amounts) internal pure returns(uint256 amountAIn, uint256 amountBIn) {
+    function updateAmountsIn(uint256 a, uint256 b, bool sellTokenA, uint256[] memory amounts)
+        internal
+        pure
+        returns (uint256 amountAIn, uint256 amountBIn)
+    {
         if (sellTokenA) {
             amountAIn = a - amounts[0];
             amountBIn = b + amounts[1];
@@ -100,12 +100,12 @@ library AerodromeUtils {
         }
     }
 
-    function reserveRatio(address pool) internal view returns(uint256) {
-        (uint256 reserveA, uint256 reserveB, ) = IPool(pool).getReserves();
+    function reserveRatio(address pool) internal view returns (uint256) {
+        (uint256 reserveA, uint256 reserveB,) = IPool(pool).getReserves();
         return mulDiv(reserveA, RAY, reserveB);
     }
 
-    function checkPriceImpact(address pool, uint256 ratioBefore) internal view returns(uint256) {
+    function checkPriceImpact(address pool, uint256 ratioBefore) internal view returns (uint256) {
         uint256 ratioAfter = reserveRatio(pool);
 
         uint256 diffBips = diff(ratioAfter, ratioBefore) * BIPS / ratioBefore;
@@ -119,15 +119,16 @@ library AerodromeUtils {
         bool stable,
         uint256 amountAMin,
         uint256 amountBMin,
-        uint256 amountAInitial, 
+        uint256 amountAInitial,
         uint256 amountBInitial
-    ) internal view returns(uint256) {
+    ) internal view returns (uint256) {
         // Calculate amountAOut, amountBOut
         address pool = IPoolFactory(AERODROME_FACTORY).getPool(tokenA, tokenB, stable);
 
         address factory = IPool(pool).factory();
-        (uint256 amountAOut, uint256 amountBOut) = IRouter(AERODROME_ROUTER).quoteRemoveLiquidity(tokenA, tokenB, stable, factory, liquidity);
-        
+        (uint256 amountAOut, uint256 amountBOut) =
+            IRouter(AERODROME_ROUTER).quoteRemoveLiquidity(tokenA, tokenB, stable, factory, liquidity);
+
         // Ensure it meets the minimum amounts, computed offchain using `quoteDepositLiquidity()`
         if (amountAOut < amountAMin || amountBOut < amountBMin) {
             revert AerodromeUtils_ExceededMaxSlippage();
@@ -161,13 +162,9 @@ library AerodromeUtils {
     /// @param leftoverA The amount of leftover tokenA
     /// @param leftoverB The amount of leftover tokenB
     /// @param recipient The address to receive the leftover tokens
-    function returnLeftovers(
-        address tokenA,
-        address tokenB,
-        uint256 leftoverA,
-        uint256 leftoverB,
-        address recipient
-    ) internal {
+    function returnLeftovers(address tokenA, address tokenB, uint256 leftoverA, uint256 leftoverB, address recipient)
+        internal
+    {
         if (leftoverA > 0) {
             if (tokenA == WETH) {
                 // Unwrap WETH to ETH and send
@@ -258,11 +255,16 @@ library AerodromeUtils {
     /// @param aDec Decimal multiplier for tokenA
     /// @param bDec Decimal multiplier for tokenB
     /// @return The calculated input amount
-    function calculateAmountIn(uint256 x, uint256 y, uint256 a, uint256 b, uint256 aDec, uint256 bDec, uint256 swapFee, bool stable)
-        internal
-        pure
-        returns (uint256)
-    {   
+    function calculateAmountIn(
+        uint256 x,
+        uint256 y,
+        uint256 a,
+        uint256 b,
+        uint256 aDec,
+        uint256 bDec,
+        uint256 swapFee,
+        bool stable
+    ) internal pure returns (uint256) {
         // Normalize to 18 decimals
         x = x * aDec;
         a = a * aDec;
@@ -277,8 +279,7 @@ library AerodromeUtils {
 
         if (stable) {
             return (ay - bx) * WAD / (y + x) / aDec;
-        }
-        else if (swapFee == 30) {
+        } else if (swapFee == 30) {
             // Compute the square root term
             uint256 innerTerm = (xy + bx) * (3_988_009 * xy + 9 * bx + 3_988_000 * ay);
             uint256 sqrtTerm = Babylonian.sqrt(innerTerm);
@@ -293,11 +294,10 @@ library AerodromeUtils {
             uint256 amountIn = (numerator * WAD) / denominator;
 
             return amountIn / aDec;
-        }
-        else { // Assumes swapFee = 100 (1%)
-
+        } else {
+            // Assumes swapFee = 100 (1%)
             // Compute the square root term
-            uint256 innerTerm = (xy + bx) * (39601 * xy +  bx + 39600 * ay);
+            uint256 innerTerm = (xy + bx) * (39_601 * xy + bx + 39_600 * ay);
             uint256 sqrtTerm = Babylonian.sqrt(innerTerm);
 
             // Compute the numerator
@@ -311,7 +311,6 @@ library AerodromeUtils {
 
             return amountIn / aDec;
         }
-        
     }
 
     /// @notice Calculates the absolute difference between two numbers
@@ -323,7 +322,7 @@ library AerodromeUtils {
         return a > b ? a - b : b - a;
     }
 
-    function subFloorZero(uint256 a, uint256 b) internal pure returns(uint256) {
+    function subFloorZero(uint256 a, uint256 b) internal pure returns (uint256) {
         return a > b ? a - b : 0;
     }
 
@@ -331,10 +330,10 @@ library AerodromeUtils {
         address tokenA,
         address tokenB,
         bool stable,
-        uint256 amountAInitial, 
+        uint256 amountAInitial,
         uint256 amountBInitial,
         bool balanceTokenRatio
-    ) internal view returns(uint256 amountAOut, uint256 amountBOut) {
+    ) internal view returns (uint256 amountAOut, uint256 amountBOut) {
         uint256 amountALeft = amountAInitial;
         uint256 amountBLeft = amountBInitial;
 
@@ -344,19 +343,15 @@ library AerodromeUtils {
 
         uint256 liquidityDeposited;
         for (uint256 i = 0; i < 2; i++) {
-
             if (balanceTokenRatio) {
-                (uint256[] memory amounts, bool sellTokenA) = quoteBalanceTokenRatio(
-                    tokenA, tokenB, amountALeft, amountBLeft, stable
-                );
+                (uint256[] memory amounts, bool sellTokenA) =
+                    quoteBalanceTokenRatio(tokenA, tokenB, amountALeft, amountBLeft, stable);
 
                 (amountALeft, amountBLeft) = updateAmountsIn(amountALeft, amountBLeft, sellTokenA, amounts);
             }
-            
 
-            (uint256 amountADeposited, uint256 amountBDeposited, uint256 liquidity) = aerodromeRouter.quoteAddLiquidity(
-                tokenA, tokenB, stable, factory, amountALeft, amountBLeft
-            );
+            (uint256 amountADeposited, uint256 amountBDeposited, uint256 liquidity) =
+                aerodromeRouter.quoteAddLiquidity(tokenA, tokenB, stable, factory, amountALeft, amountBLeft);
 
             amountALeft -= amountADeposited;
             amountBLeft -= amountBDeposited;
@@ -366,19 +361,16 @@ library AerodromeUtils {
             if (!stable || !balanceTokenRatio) break; // only iterate once for volatile pairs, or if not balancing token ratio
         }
 
-
-        (amountAOut, amountBOut) 
-            = aerodromeRouter.quoteRemoveLiquidity(tokenA, tokenB, stable, factory, liquidityDeposited);
+        (amountAOut, amountBOut) =
+            aerodromeRouter.quoteRemoveLiquidity(tokenA, tokenB, stable, factory, liquidityDeposited);
     }
 
     // Simulates balanceTokenRatio(), without any state changes
-    function quoteBalanceTokenRatio(
-        address tokenA,
-        address tokenB,
-        uint256 amountA,
-        uint256 amountB,
-        bool stable
-    ) internal view returns (uint256[] memory amounts, bool sellTokenA) {
+    function quoteBalanceTokenRatio(address tokenA, address tokenB, uint256 amountA, uint256 amountB, bool stable)
+        internal
+        view
+        returns (uint256[] memory amounts, bool sellTokenA)
+    {
         uint256 aDecMultiplier = 10 ** (18 - IERC20Metadata(tokenA).decimals());
         uint256 bDecMultiplier = 10 ** (18 - IERC20Metadata(tokenB).decimals());
 

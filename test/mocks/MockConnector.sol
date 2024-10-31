@@ -25,7 +25,6 @@ contract MockConnector {
             revert("MockConnector: Intentional failure");
         }
 
-
         lastValue = value;
 
         // Return ETH if set
@@ -40,7 +39,7 @@ contract MockConnector {
         revert("MockConnector: Intentional failure");
     }
 
-    function getVersion() external view returns(uint256 version) {
+    function getVersion() external view returns (uint256 version) {
         version = 1;
     }
 

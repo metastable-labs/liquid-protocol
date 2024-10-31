@@ -7,6 +7,7 @@ import "../src/ConnectorRegistry.sol";
 contract MockConnector {
     uint256 public getVersion = 1;
 }
+
 contract ConnectorRegistryTest is Test {
     ConnectorRegistry public registry;
     address public owner;
@@ -56,9 +57,7 @@ contract ConnectorRegistryTest is Test {
     }
 
     function test_RevertWhenUpdatingNonExistentConnector() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(ConnectorRegistry.ConnectorDoesNotExist.selector, testConnector2)
-        );
+        vm.expectRevert(abi.encodeWithSelector(ConnectorRegistry.ConnectorDoesNotExist.selector, testConnector2));
         registry.updateConnectorName(testConnector2, "NonExistent");
     }
 
@@ -83,7 +82,5 @@ contract ConnectorRegistryTest is Test {
 
         registry.updateConnectorStatus(testConnector1, false);
         assertFalse(registry.isApprovedConnector(testConnector1));
-    
-
     }
 }
