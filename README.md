@@ -76,6 +76,6 @@ sh shell/deploy.sh --network=DESIRED_NETWORK
 
 | Contract | Network | Address |
 |----------|---------|---------|
-| AerodromeConnector | Base | [`0xaab8909B149Dd3e0DAcd2e46E846EAe75070EF47`](https://basescan.org/address/0xaab8909B149Dd3e0DAcd2e46E846EAe75070EF47) |
-| ConnectorPlugin | Base | [`0x2f9a3fb2D6666A062148784DC04bC9273E017366`](https://basescan.org/address/0x2f9a3fb2D6666A062148784DC04bC9273E017366) |
-| ConnectorRegistry | Base | [`0x03189a1286AF104A2bfDf980B92C152B8CE3CaAd`](https://basescan.org/address/0x03189a1286AF104A2bfDf980B92C152B8CE3CaAd) |
+| AerodromeConnector | Base | [`0x2546A0C1117710299701FcaC752e6E38607d3b10`](https://basescan.org/address/0x2546A0C1117710299701FcaC752e6E38607d3b10) |
+| ConnectorPlugin | Base | [`0x419cCfda705E4571daC46374159D018fFDAbCfec`](https://basescan.org/address/0x419cCfda705E4571daC46374159D018fFDAbCfec) |
+| ConnectorRegistry | Base | [`0xb9a18F99Cb79cEFc8b5c85EedBD54a22871164D6`](https://basescan.org/address/0xb9a18F99Cb79cEFc8b5c85EedBD54a22871164D6) |
