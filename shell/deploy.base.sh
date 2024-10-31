@@ -10,7 +10,6 @@ source .env
 
 export ETHERSCAN_API_KEY=$BASESCAN_API_KEY
 export RPC_URL=$BASE_RPC_URL
-export DEPLOYER_PUB=$DEPLOYER_PUB
 
 read -p "Press enter to begin the deployment..."
 
