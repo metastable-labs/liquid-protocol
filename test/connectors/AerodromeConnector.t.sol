@@ -44,22 +44,30 @@ contract AerodromeConnectorTest is Test {
         deal(DOLA, ALICE, INITIAL_ETH_BALANCE);
         deal(TOKENA, ALICE, INITIAL_AERO_BALANCE);
 
-
         vm.startPrank(ALICE);
-            IERC20(USDC).approve(address(connector), type(uint256).max);
-            IERC20(WETH).approve(address(connector), type(uint256).max);
-            IERC20(USDC_WETH_POOL).approve(address(connector), type(uint256).max);
-            IERC20(USDT).approve(address(connector), type(uint256).max);
-            IERC20(AERO).approve(address(connector), type(uint256).max);
-            IERC20(DOLA).approve(address(connector), type(uint256).max);
-            IERC20(TOKENA).approve(address(connector), type(uint256).max);
+        IERC20(USDC).approve(address(connector), type(uint256).max);
+        IERC20(WETH).approve(address(connector), type(uint256).max);
+        IERC20(USDC_WETH_POOL).approve(address(connector), type(uint256).max);
+        IERC20(USDT).approve(address(connector), type(uint256).max);
+        IERC20(AERO).approve(address(connector), type(uint256).max);
+        IERC20(DOLA).approve(address(connector), type(uint256).max);
+        IERC20(TOKENA).approve(address(connector), type(uint256).max);
         vm.stopPrank();
     }
-    function _quoteDepositLiquidity(address tokenA, address tokenB, bool stable, uint256 a, uint256 b, bool balance, uint256 slippage) internal returns(uint256 amountA, uint256 amountB) {
+
+    function _quoteDepositLiquidity(
+        address tokenA,
+        address tokenB,
+        bool stable,
+        uint256 a,
+        uint256 b,
+        bool balance,
+        uint256 slippage
+    ) internal returns (uint256 amountA, uint256 amountB) {
         vm.warp(block.timestamp - 15);
         (amountA, amountB) = connector.quoteDepositLiquidity(tokenA, tokenB, stable, a, b, balance);
-        amountA = amountA * (10000 - slippage) / 10000;
-        amountB = amountB * (10000 - slippage) / 10000;
+        amountA = amountA * (10_000 - slippage) / 10_000;
+        amountB = amountB * (10_000 - slippage) / 10_000;
         vm.warp(block.timestamp + 15);
     }
 
@@ -78,7 +86,7 @@ contract AerodromeConnectorTest is Test {
         uint256 deadline = block.timestamp + 1 hours;
 
         // Change these params to change the pool, tokens, amounts
-        uint256 amountADesired = 10_000e18;  // 100 tokenA
+        uint256 amountADesired = 10_000e18; // 100 tokenA
         uint256 amountBDesired = 10_000e18; // 1 tokenB
         address tokenA = 0x4621b7A9c75199271F773Ebd9A499dbd165c3191;
         address tokenB = 0xD5B9dDB04f20eA773C9b56607250149B26049B1F;
@@ -87,11 +95,11 @@ contract AerodromeConnectorTest is Test {
 
         _dealAndApprove(tokenA, tokenB, amountADesired, amountBDesired, address(connector));
 
-        (uint256 amountAMin, uint256 amountBMin) = 
+        (uint256 amountAMin, uint256 amountBMin) =
             _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, balanceRatio, slippage);
 
         console.log("mins given: A:%e, B:%e", amountAMin, amountBMin);
-        
+
         vm.startPrank(ALICE);
 
         console.log("TOKENA balance before: %s", IERC20(tokenA).balanceOf(ALICE));
@@ -124,12 +132,10 @@ contract AerodromeConnectorTest is Test {
         vm.stopPrank();
     }
 
-
-
     function test_manipulatePrice_addLiquidity() public {
         uint256 amountADesired = 100e18; // 100 AERO
         uint256 amountBDesired = 1 ether; // 1 WETH
-        
+
         address tokenA = TOKENA;
         address tokenB = WETH;
         bool stable = false;
@@ -138,7 +144,7 @@ contract AerodromeConnectorTest is Test {
         uint256 slippage = 60; // 0.6%
         uint256 deadline = block.timestamp + 1 hours;
 
-        (uint256 amountAMin, uint256 amountBMin) = 
+        (uint256 amountAMin, uint256 amountBMin) =
             _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, balanceRatio, slippage);
 
         // manipulate price
@@ -149,7 +155,7 @@ contract AerodromeConnectorTest is Test {
         vm.startPrank(manipulator);
         IERC20(tokenB).approve(address(AERODROME_ROUTER), 100e18);
         IRouter(AERODROME_ROUTER).swapExactTokensForTokens(100e18, 0, routes, manipulator, block.timestamp + 60);
-        
+
         // add liquidity
         vm.startPrank(ALICE);
         bytes memory data = abi.encodeWithSelector(
@@ -175,18 +181,17 @@ contract AerodromeConnectorTest is Test {
     }
 
     function test_fuzz_addLiquidity(uint256 amountA, uint256 amountB) public {
-        uint256 amountADesired = 1e18 + amountA % (INITIAL_ETH_BALANCE/100 - 1e18); // 1e13 tokenA
-        uint256 amountBDesired = 1e18 + amountB % (INITIAL_ETH_BALANCE/100 - 1e18); // up to 10 ETH
+        uint256 amountADesired = 1e18 + amountA % (INITIAL_ETH_BALANCE / 100 - 1e18); // 1e13 tokenA
+        uint256 amountBDesired = 1e18 + amountB % (INITIAL_ETH_BALANCE / 100 - 1e18); // up to 10 ETH
         uint256 deadline = block.timestamp + 1 hours;
         uint256 slippage = 50; // 0.5%
-        
 
         address tokenA = TOKENA;
         address tokenB = WETH;
         bool stable = false;
         bool balanceRatio = false;
 
-        (uint256 amountAMin, uint256 amountBMin) = 
+        (uint256 amountAMin, uint256 amountBMin) =
             _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, balanceRatio, slippage);
 
         vm.startPrank(ALICE);
@@ -219,8 +224,8 @@ contract AerodromeConnectorTest is Test {
 
     // weth/usdc fuzz test
     function test_fuzz_weth_addLiquidity(uint256 amountA, uint256 amountB) public {
-        uint256 amountADesired = bound(amountA, 1e4, INITIAL_BALANCE/10); // 100,000 USDC
-        uint256 amountBDesired = bound(amountB, 1e13, INITIAL_ETH_BALANCE/20); // 50 ETH
+        uint256 amountADesired = bound(amountA, 1e4, INITIAL_BALANCE / 10); // 100,000 USDC
+        uint256 amountBDesired = bound(amountB, 1e13, INITIAL_ETH_BALANCE / 20); // 50 ETH
         uint256 deadline = block.timestamp + 1 hours;
         uint256 slippage = 60; // 0.6%
 
@@ -229,7 +234,7 @@ contract AerodromeConnectorTest is Test {
         bool stable = false;
         bool balanceRatio = false;
 
-        (uint256 amountAMin, uint256 amountBMin) = 
+        (uint256 amountAMin, uint256 amountBMin) =
             _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, balanceRatio, slippage);
 
         vm.startPrank(ALICE);
@@ -272,7 +277,7 @@ contract AerodromeConnectorTest is Test {
         bool stable = false;
         bool balanceRatio = false;
 
-        (uint256 amountAMin, uint256 amountBMin) = 
+        (uint256 amountAMin, uint256 amountBMin) =
             _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, balanceRatio, slippage);
 
         vm.startPrank(ALICE);
@@ -305,8 +310,8 @@ contract AerodromeConnectorTest is Test {
     }
 
     function test_fuzz_aero_addLiquidity(uint256 amountA, uint256 amountB) public {
-        uint256 amountADesired = 100000 + amountA % (INITIAL_BALANCE/3 - 100000); // Up to 333k USDC
-        uint256 amountBDesired = 1e17 + amountB % (INITIAL_ETH_BALANCE*100 - 1e17); // Up to 100k AERO
+        uint256 amountADesired = 100_000 + amountA % (INITIAL_BALANCE / 3 - 100_000); // Up to 333k USDC
+        uint256 amountBDesired = 1e17 + amountB % (INITIAL_ETH_BALANCE * 100 - 1e17); // Up to 100k AERO
         deal(AERO, ALICE, amountBDesired);
         uint256 deadline = block.timestamp + 1 hours;
         uint256 slippage = 60; // 0.6%
@@ -316,7 +321,7 @@ contract AerodromeConnectorTest is Test {
         bool stable = false;
         bool balanceRatio = false;
 
-        (uint256 amountAMin, uint256 amountBMin) = 
+        (uint256 amountAMin, uint256 amountBMin) =
             _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, balanceRatio, slippage);
 
         vm.startPrank(ALICE);
@@ -360,7 +365,7 @@ contract AerodromeConnectorTest is Test {
         bool stable = false;
         bool balanceRatio = false;
 
-        (uint256 amountAMin, uint256 amountBMin) = 
+        (uint256 amountAMin, uint256 amountBMin) =
             _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, balanceRatio, slippage);
         console.log("mins given: A:%e, B:%e", amountAMin, amountBMin);
 
@@ -393,11 +398,10 @@ contract AerodromeConnectorTest is Test {
         vm.stopPrank();
     }
 
-
     // Testing the DOLA/USDC basic stable pair
     function test_fuzz_dola_addLiquidity(uint256 a, uint256 b) public {
-        uint256 amountADesired = bound(a, 1e5, INITIAL_BALANCE/10 - 1e5); // USDC
-        uint256 amountBDesired = bound(b, 1e17, INITIAL_ETH_BALANCE/10 - 1e17); // DOLA
+        uint256 amountADesired = bound(a, 1e5, INITIAL_BALANCE / 10 - 1e5); // USDC
+        uint256 amountBDesired = bound(b, 1e17, INITIAL_ETH_BALANCE / 10 - 1e17); // DOLA
 
         uint256 deadline = block.timestamp + 1 hours;
         uint256 slippage = 60; // 0.6%
@@ -407,7 +411,7 @@ contract AerodromeConnectorTest is Test {
         bool stable = true;
         bool balanceRatio = false;
 
-        (uint256 amountAMin, uint256 amountBMin) = 
+        (uint256 amountAMin, uint256 amountBMin) =
             _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, balanceRatio, slippage);
 
         vm.startPrank(ALICE);
@@ -450,7 +454,7 @@ contract AerodromeConnectorTest is Test {
         bool stable = true;
         bool balanceRatio = false;
 
-        (uint256 amountAMin, uint256 amountBMin) = 
+        (uint256 amountAMin, uint256 amountBMin) =
             _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, balanceRatio, slippage);
 
         vm.startPrank(ALICE);
@@ -487,13 +491,13 @@ contract AerodromeConnectorTest is Test {
         uint256 amountBDesired = 1e9; // 1000 USDC. Some should get swapped to WETH
         uint256 deadline = block.timestamp + 1 hours;
         uint256 slippage = 60; // 0.6%
-        
+
         address tokenA = WETH;
         address tokenB = USDC;
         bool stable = false;
         bool balanceRatio = true;
 
-        (uint256 amountAMin, uint256 amountBMin) = 
+        (uint256 amountAMin, uint256 amountBMin) =
             _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, balanceRatio, slippage);
 
         vm.startPrank(ALICE);

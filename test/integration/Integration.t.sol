@@ -13,7 +13,6 @@ import {IRouter} from "@aerodrome/contracts/contracts/interfaces/IRouter.sol";
 import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/IPoolFactory.sol";
 
 contract Integration is Test {
-
     ConnectorPlugin public plugin;
     ConnectorRegistry public registry;
     AerodromeConnector public connector;
@@ -43,7 +42,6 @@ contract Integration is Test {
         deal(USDC, ALICE, INITIAL_BALANCE);
         deal(WETH, ALICE, INITIAL_ETH_BALANCE);
 
-
         vm.startPrank(ALICE);
         IERC20(USDC).approve(address(connector), type(uint256).max);
         IERC20(WETH).approve(address(connector), type(uint256).max);
@@ -56,14 +54,21 @@ contract Integration is Test {
         vm.stopPrank();
     }
 
-    function _quoteDepositLiquidity(address tokenA, address tokenB, bool stable, uint256 a, uint256 b, bool balance, uint256 slippage) internal returns(uint256 amountA, uint256 amountB) {
+    function _quoteDepositLiquidity(
+        address tokenA,
+        address tokenB,
+        bool stable,
+        uint256 a,
+        uint256 b,
+        bool balance,
+        uint256 slippage
+    ) internal returns (uint256 amountA, uint256 amountB) {
         vm.warp(block.timestamp - 15);
         (amountA, amountB) = connector.quoteDepositLiquidity(tokenA, tokenB, stable, a, b, balance);
-        amountA = amountA * (10000 - slippage) / 10000;
-        amountB = amountB * (10000 - slippage) / 10000;
+        amountA = amountA * (10_000 - slippage) / 10_000;
+        amountB = amountB * (10_000 - slippage) / 10_000;
         vm.warp(block.timestamp + 15);
     }
-
 
     function test_plugin_addLiquidity() public {
         uint256 amountADesired = 1000 * 1e6; // 1,000 USDC
@@ -75,11 +80,10 @@ contract Integration is Test {
         address tokenB = WETH;
         bool stable = false;
 
-        (uint256 amountAMin, uint256 amountBMin) = 
+        (uint256 amountAMin, uint256 amountBMin) =
             _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, true, slippage);
 
         vm.startPrank(ALICE);
-
 
         bytes memory data = abi.encodeWithSelector(
             IRouter.addLiquidity.selector,
@@ -114,12 +118,11 @@ contract Integration is Test {
         uint256 deadline = block.timestamp + 1 hours;
         uint256 slippage = 60; // 0.6%
 
-
         address tokenA = USDC;
         address tokenB = WETH;
         bool stable = false;
 
-        (uint256 amountAMin, uint256 amountBMin) = 
+        (uint256 amountAMin, uint256 amountBMin) =
             _quoteDepositLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, true, slippage);
 
         vm.startPrank(ALICE);
@@ -237,7 +240,6 @@ contract Integration is Test {
         uint256 deadline = block.timestamp + 1 hours;
 
         vm.startPrank(ALICE);
-
 
         IRouter.Route[] memory routes = new IRouter.Route[](1);
         routes[0] = IRouter.Route({from: WETH, to: USDC, stable: false, factory: AERODROME_FACTORY});

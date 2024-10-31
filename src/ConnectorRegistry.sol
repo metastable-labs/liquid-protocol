@@ -9,6 +9,7 @@ import {IConnector} from "./interface/IConnector.sol";
  * This contract allows for the addition, updating, and deactivation of connectors,
  * as well as checking the approval status of a given connector address and version.
  */
+
 contract ConnectorRegistry is Ownable(msg.sender) {
     // Custom errors
     error ConnectorAlreadyExists(address connector, uint256 version);
@@ -22,6 +23,7 @@ contract ConnectorRegistry is Ownable(msg.sender) {
      * @param version Version of the connector (v1, v2, v3, etc.)
      * @param isActive Whether the connector version is currently active
      */
+
     struct ConnectorState {
         string name;
         uint256 version;
@@ -45,9 +47,9 @@ contract ConnectorRegistry is Ownable(msg.sender) {
      * @param _name Name of the connector
      */
     function addConnector(address _connector, string memory _name) external onlyOwner {
-        
-        if (connectors[_connector].version != 0) 
+        if (connectors[_connector].version != 0) {
             revert ConnectorAlreadyExists(_connector, connectors[_connector].version);
+        }
 
         uint256 version = IConnector(_connector).getVersion();
 
@@ -64,8 +66,9 @@ contract ConnectorRegistry is Ownable(msg.sender) {
      * @param _name New name of the connector
      */
     function updateConnectorName(address _connector, string memory _name) external onlyOwner {
-        if (connectors[_connector].version == 0) 
+        if (connectors[_connector].version == 0) {
             revert ConnectorDoesNotExist(_connector);
+        }
 
         connectors[_connector].name = _name;
         emit ConnectorUpdated(_connector, _name);
@@ -80,8 +83,9 @@ contract ConnectorRegistry is Ownable(msg.sender) {
         if (connectors[_connector].isActive == _status) {
             revert StatusNotChanged();
         }
-        if (connectors[_connector].version == 0) 
+        if (connectors[_connector].version == 0) {
             revert ConnectorDoesNotExist(_connector);
+        }
 
         connectors[_connector].isActive = _status;
 

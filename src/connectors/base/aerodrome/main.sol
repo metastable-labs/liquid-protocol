@@ -37,18 +37,18 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
     receive() external payable {}
 
-    /// @notice Executes a liquidity action on Aerodrome 
+    /// @notice Executes a liquidity action on Aerodrome
     /// @param data The encoded parameters for the desired action
     /// @return bytes Encoded return data from the call
     function execute(bytes calldata data) external payable override returns (bytes memory) {
         return execute(data, msg.sender);
-    } 
+    }
 
     /// @notice Allows specifying a caller (to be used by the plugin)
     function execute(bytes calldata data, address caller) public payable returns (bytes memory) {
         // Extract the original caller (smart wallet) address from the end of the data
         address originalCaller = msg.sender == _plugin ? caller : msg.sender;
-        
+
         bytes4 selector = bytes4(data[:4]);
 
         if (selector == aerodromeRouter.addLiquidity.selector) {
@@ -133,30 +133,37 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
 
         address pool = aerodromeFactory.getPool(tokenA, tokenB, stable);
         if (pool == address(0)) revert PoolDoesNotExist();
-         
+
         _receiveTokensFromCaller(tokenA, amountAIn, tokenB, amountBIn, caller);
 
         uint256 ratioBefore = AerodromeUtils.reserveRatio(pool);
-                
+
         uint256 amountALeft = amountAIn;
         uint256 amountBLeft = amountBIn;
-        
+
         // Balance token ratios
         for (uint256 i = 0; i < 2; i++) {
-
             if (balanceTokenRatio) {
-                (uint256[] memory amounts, bool sellTokenA) = AerodromeUtils.balanceTokenRatio(
-                    tokenA, tokenB, amountALeft, amountBLeft, stable
-                );
+                (uint256[] memory amounts, bool sellTokenA) =
+                    AerodromeUtils.balanceTokenRatio(tokenA, tokenB, amountALeft, amountBLeft, stable);
 
-                (amountALeft, amountBLeft) = AerodromeUtils.updateAmountsIn(amountALeft, amountBLeft, sellTokenA, amounts);
+                (amountALeft, amountBLeft) =
+                    AerodromeUtils.updateAmountsIn(amountALeft, amountBLeft, sellTokenA, amounts);
             }
             // Approve tokens to router
             IERC20(tokenA).approve(address(aerodromeRouter), amountALeft);
             IERC20(tokenB).approve(address(aerodromeRouter), amountBLeft);
 
             (uint256 amountADeposited, uint256 amountBDeposited, uint256 liquidity) = aerodromeRouter.addLiquidity(
-                tokenA, tokenB, stable, amountALeft, amountBLeft, 0, 0, to, deadline // 0 amountOutMin because we do checkValueOut()
+                tokenA,
+                tokenB,
+                stable,
+                amountALeft,
+                amountBLeft,
+                0,
+                0,
+                to,
+                deadline // 0 amountOutMin because we do checkValueOut()
             );
 
             amountALeft -= amountADeposited;
@@ -171,10 +178,12 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
         }
         AerodromeUtils.checkPriceImpact(pool, ratioBefore);
 
-        AerodromeUtils.checkValueOut(liquidityDeposited, tokenA, tokenB, stable, amountAMin, amountBMin, amountAIn, amountBIn);
+        AerodromeUtils.checkValueOut(
+            liquidityDeposited, tokenA, tokenB, stable, amountAMin, amountBMin, amountAIn, amountBIn
+        );
 
         AerodromeUtils.returnLeftovers(tokenA, tokenB, amountALeft, amountBLeft, caller);
-        
+
         emit LiquidityAdded(tokenA, tokenB, amountAUsed, amountBUsed, liquidityDeposited);
     }
 
@@ -232,14 +241,15 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     }
 
     /// @notice Transfers tokens from the caller to the contract
-    function _receiveTokensFromCaller(address tokenA, uint256 amountA, address tokenB, uint256 amountB, address caller) internal {
+    function _receiveTokensFromCaller(address tokenA, uint256 amountA, address tokenB, uint256 amountB, address caller)
+        internal
+    {
         if (amountA > 0) {
             if (tokenA == WETH && msg.value > 0) {
                 if (msg.value != amountA) revert IncorrectETHAmount();
 
                 IWETH(WETH).deposit{value: msg.value}();
-            }
-            else {
+            } else {
                 IERC20(tokenA).transferFrom(caller, address(this), amountA);
             }
         }
@@ -248,8 +258,7 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
                 if (msg.value != amountB) revert IncorrectETHAmount();
 
                 IWETH(WETH).deposit{value: msg.value}();
-            }
-            else {
+            } else {
                 IERC20(tokenB).transferFrom(caller, address(this), amountB);
             }
         }
@@ -265,13 +274,14 @@ contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
     /// @return amountAOut The amount of token A expected to be deposited
     /// @return amountBOut The amount of token B expected to be deposited
     function quoteDepositLiquidity(
-        address tokenA, 
-        address tokenB, 
-        bool stable, 
-        uint256 amountA, 
+        address tokenA,
+        address tokenB,
+        bool stable,
+        uint256 amountA,
         uint256 amountB,
         bool balanceTokenRatio
-    ) external view returns(uint256 amountAOut, uint256 amountBOut) {
-        (amountAOut, amountBOut) =  AerodromeUtils.quoteDepositLiquidity(tokenA, tokenB, stable, amountA, amountB, balanceTokenRatio);
+    ) external view returns (uint256 amountAOut, uint256 amountBOut) {
+        (amountAOut, amountBOut) =
+            AerodromeUtils.quoteDepositLiquidity(tokenA, tokenB, stable, amountA, amountB, balanceTokenRatio);
     }
 }
