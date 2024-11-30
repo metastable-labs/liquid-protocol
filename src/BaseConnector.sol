@@ -8,7 +8,7 @@ import "./interface/IConnector.sol";
  * @dev Abstract contract implementing basic connector functionality.
  * This contract serves as a base for specific connector implementations.
  */
-abstract contract BaseConnector is IConnector {
+abstract contract BaseProtocol is IProtocol {
     /// @notice Name of the connector
     bytes32 private immutable _name;
 
@@ -55,7 +55,9 @@ abstract contract BaseConnector is IConnector {
      * @param data The calldata for the function call
      * @return bytes The return data from the function call
      */
-    function execute(bytes calldata data) external payable virtual override returns (bytes memory);
+    function execute(
+        bytes calldata data
+    ) external payable virtual override returns (bytes memory);
 
     /**
      * @dev Internal function to get the function selector from calldata
