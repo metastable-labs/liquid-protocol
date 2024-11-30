@@ -46,13 +46,16 @@ abstract contract BaseProtocol is IProtocol {
      * @param data The calldata for the function call
      * @return bytes The return data from the function call
      */
-    function execute(bytes calldata data) external payable virtual returns (bytes memory);
+    function execute(
+        bytes calldata data
+    ) external payable virtual returns (bytes memory);
 
     /**
      * @dev Internal function to get the function selector from calldata
      * @param data The calldata to extract the selector from
      * @return bytes4 The function selector
      */
+    // do we really need this?
     function _getSelector(bytes calldata data) internal pure returns (bytes4) {
         return bytes4(data[:4]);
     }
