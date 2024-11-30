@@ -21,7 +21,7 @@ interface IProtocol {
         YIELD
     }
 
-    function getProtocolId() external view returns (uint256);
+    function getProtocolName() external view returns (bytes32);
     function getProtocolType() external view returns (ProtocolType);
     /// @notice Standard action execution interface
     function execute(ActionType actionType, address asset, uint256 amount, bytes calldata data)
