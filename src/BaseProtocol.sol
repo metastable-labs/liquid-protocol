@@ -47,8 +47,9 @@ abstract contract BaseProtocol is IProtocolIntegration {
      * @param data The calldata for the function call containing the parameters
      * @return result The return data from the function call
      */
-    function execute(
-        ActionType actionType,
-        bytes calldata data
-    ) external payable virtual returns (bytes memory result);
+    function execute(ActionType actionType, bytes calldata data)
+        external
+        payable
+        virtual
+        returns (bytes memory result);
 }

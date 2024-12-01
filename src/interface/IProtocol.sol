@@ -12,6 +12,7 @@ interface IProtocolIntegration {
         UNSTAKE, // Unstake assets
         SWAP, // Swap assets
         CLAIM // Claim rewards
+
     }
 
     enum ProtocolType {
@@ -23,8 +24,5 @@ interface IProtocolIntegration {
     function getProtocolName() external view returns (bytes32);
     function getProtocolType() external view returns (ProtocolType);
     /// @notice Standard action execution interface
-    function execute(
-        ActionType actionType,
-        bytes calldata data
-    ) external payable returns (bytes memory result);
+    function execute(ActionType actionType, bytes calldata data) external payable returns (bytes memory result);
 }
