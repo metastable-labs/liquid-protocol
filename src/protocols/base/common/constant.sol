@@ -11,11 +11,7 @@ abstract contract Constants {
     // Wrapped Ether
     address internal constant WETH = 0x4200000000000000000000000000000000000006;
 
-    // Uniswap V2
-    address internal constant UNISWAP_V2_ROUTER = 0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24;
-    address internal constant UNISWAP_V2_FACTORY = 0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6;
-
-    // aerodrome
+    // Aerodrome Basic contracts
     address internal constant AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
     address internal constant AERODROME_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
 

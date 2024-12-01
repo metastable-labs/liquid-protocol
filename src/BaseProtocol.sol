@@ -43,20 +43,13 @@ abstract contract BaseProtocol is IProtocol {
     /**
      * @notice Executes a function call on the connected protocol
      * @dev This function must be implemented by derived contracts
-     * @param data The calldata for the function call
-     * @return bytes The return data from the function call
+     * @param actionType The Core actions that a protocol can perform
+     * @param data The calldata for the function call containing the parameters
+     * @return result The return data from the function call
      */
-    function execute(
-        bytes calldata data
-    ) external payable virtual returns (bytes memory);
-
-    /**
-     * @dev Internal function to get the function selector from calldata
-     * @param data The calldata to extract the selector from
-     * @return bytes4 The function selector
-     */
-    // do we really need this?
-    function _getSelector(bytes calldata data) internal pure returns (bytes4) {
-        return bytes4(data[:4]);
-    }
+    function execute(ActionType actionType, bytes calldata data)
+        external
+        payable
+        virtual
+        returns (bytes memory result);
 }

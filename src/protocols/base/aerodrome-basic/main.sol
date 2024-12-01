@@ -6,64 +6,77 @@ import {IRouter} from "@aerodrome/contracts/contracts/interfaces/IRouter.sol";
 import {IPool} from "@aerodrome/contracts/contracts/interfaces/IPool.sol";
 import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/IPoolFactory.sol";
 
-import {BaseConnector} from "../../../BaseConnector.sol";
+import {BaseProtocol} from "../../../BaseProtocol.sol";
 import {Constants} from "../common/constant.sol";
 import {AerodromeUtils} from "./utils.sol";
 import "./interface.sol";
 import "./events.sol";
 
-contract AerodromeConnector is BaseConnector, Constants, AerodromeEvents {
+contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
+    /* ========== STATE VARIABLES ========== */
+
+    /// @notice Router contract for executing Aerodrome trades and liquidity operations
     IRouter public immutable aerodromeRouter;
+
+    /// @notice Factory contract for creating and managing Aerodrome pools
     IPoolFactory public immutable aerodromeFactory;
 
+    /* ========== ERRORS ========== */
+
+    /// @notice Thrown when execution fails with a specific reason
     error ExecutionFailed(string reason);
 
-    error InvalidSelector();
+    /// @notice Thrown when an invalid action type is provided
+    error InvalidAction();
+
+    /// @notice Thrown when transaction deadline has passed
     error DeadlineExpired();
+
+    /// @notice Thrown when pool has insufficient liquidity
     error InsufficientLiquidity();
+
+    /// @notice Thrown when slippage tolerance is exceeded
     error SlippageExceeded();
+
+    /// @notice Thrown when caller is not authorized
     error UnauthorizedCaller();
 
+    /// @notice Thrown when ETH amount doesn't match the required amount
     error IncorrectETHAmount();
+
+    /// @notice Thrown when trying to interact with a non-existent pool
     error PoolDoesNotExist();
 
-    /// @notice Initializes the AerodromeConnector
-    /// @param name Name of the connector
-    /// @param version Version of the connector
-    constructor(string memory name, uint256 version, address plugin) BaseConnector(name, version, plugin) {
+    /// @notice Initializes the AerodromeProtocol
+    /// @param name Name of the Protocol
+    /// @param protocolType Type of protocol
+    constructor(string memory name, ProtocolType protocolType) BaseProtocol(name, protocolType) {
         aerodromeRouter = IRouter(AERODROME_ROUTER);
         aerodromeFactory = IPoolFactory(AERODROME_FACTORY);
     }
 
     receive() external payable {}
 
-    /// @notice Executes a liquidity action on Aerodrome
-    /// @param data The encoded parameters for the desired action
-    /// @return bytes Encoded return data from the call
-    function execute(bytes calldata data) external payable override returns (bytes memory) {
-        return execute(data, msg.sender);
-    }
+    // TODO: only the execution engine should be able to call this execute method
+    // TODO: add methods for fee withdrawal and unstaking
+    /// @notice Executes an action
+    function execute(ActionType actionType, bytes calldata data) external payable override returns (bytes memory) {
+        // TODO: also ensure that the original caller is execution engine
+        address executionEngine = msg.sender;
 
-    /// @notice Allows specifying a caller (to be used by the plugin)
-    function execute(bytes calldata data, address caller) public payable returns (bytes memory) {
-        // Extract the original caller (smart wallet) address from the end of the data
-        address originalCaller = msg.sender == _plugin ? caller : msg.sender;
-
-        bytes4 selector = bytes4(data[:4]);
-
-        if (selector == aerodromeRouter.addLiquidity.selector) {
-            (uint256 amountA, uint256 amountB, uint256 liquidity) = _depositBasicLiquidity(data, originalCaller);
+        if (actionType == ActionType.SUPPLY) {
+            (uint256 amountA, uint256 amountB, uint256 liquidity) = _depositBasicLiquidity(data, executionEngine);
             return abi.encode(amountA, amountB, liquidity);
-        } else if (selector == aerodromeRouter.removeLiquidity.selector) {
-            (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(data, originalCaller);
+        } else if (actionType == ActionType.WITHDRAW) {
+            (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(data, executionEngine);
             return abi.encode(amountA, amountB);
-        } else if (selector == aerodromeRouter.swapExactTokensForTokens.selector) {
-            uint256[] memory amounts = _swapExactTokensForTokens(data, originalCaller);
+        } else if (actionType == ActionType.SWAP) {
+            uint256[] memory amounts = _swapExactTokensForTokens(data, executionEngine);
             return abi.encode(amounts);
-        } else if (selector == IGauge.deposit.selector) {
-            return _depositToGauge(data, originalCaller);
+        } else if (actionType == ActionType.STAKE) {
+            return _depositToGauge(data, executionEngine);
         }
-        revert InvalidSelector();
+        revert InvalidAction();
     }
 
     /// @notice Swaps exact tokens for tokens on the Aerodrome protocol

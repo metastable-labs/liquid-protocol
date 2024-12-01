@@ -24,11 +24,5 @@ interface IProtocol {
     function getProtocolName() external view returns (bytes32);
     function getProtocolType() external view returns (ProtocolType);
     /// @notice Standard action execution interface
-    function execute(ActionType actionType, address asset, uint256 amount, bytes calldata data)
-        external
-        payable
-        returns (bytes memory result);
-
-    /// @notice Position information
-    function getPosition(address account) external view returns (bytes memory);
+    function execute(ActionType actionType, bytes calldata data) external payable returns (bytes memory result);
 }
