@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.12;
 
-interface IProtocol {
+interface IProtocolIntegration {
     /// @notice Core actions that a protocol can perform
     enum ActionType {
         SUPPLY, // Supply assets
@@ -12,7 +12,6 @@ interface IProtocol {
         UNSTAKE, // Unstake assets
         SWAP, // Swap assets
         CLAIM // Claim rewards
-
     }
 
     enum ProtocolType {
@@ -24,5 +23,8 @@ interface IProtocol {
     function getProtocolName() external view returns (bytes32);
     function getProtocolType() external view returns (ProtocolType);
     /// @notice Standard action execution interface
-    function execute(ActionType actionType, bytes calldata data) external payable returns (bytes memory result);
+    function execute(
+        ActionType actionType,
+        bytes calldata data
+    ) external payable returns (bytes memory result);
 }

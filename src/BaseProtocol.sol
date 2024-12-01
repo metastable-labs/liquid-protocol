@@ -8,7 +8,7 @@ import "./interface/IProtocol.sol";
  * @dev Abstract contract implementing basic protocol functionality.
  * This contract serves as a base for specific protocol implementations.
  */
-abstract contract BaseProtocol is IProtocol {
+abstract contract BaseProtocol is IProtocolIntegration {
     /// @notice Name of the protocol
     bytes32 public immutable protocolName;
 
@@ -47,9 +47,8 @@ abstract contract BaseProtocol is IProtocol {
      * @param data The calldata for the function call containing the parameters
      * @return result The return data from the function call
      */
-    function execute(ActionType actionType, bytes calldata data)
-        external
-        payable
-        virtual
-        returns (bytes memory result);
+    function execute(
+        ActionType actionType,
+        bytes calldata data
+    ) external payable virtual returns (bytes memory result);
 }

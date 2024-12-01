@@ -50,10 +50,7 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
     /// @notice Initializes the AerodromeProtocol
     /// @param name Name of the Protocol
     /// @param protocolType Type of protocol
-    constructor(
-        string memory name,
-        ProtocolType protocolType
-    ) BaseProtocol(name, protocolType) {
+    constructor(string memory name, ProtocolType protocolType) BaseProtocol(name, protocolType) {
         aerodromeRouter = IRouter(AERODROME_ROUTER);
         aerodromeFactory = IPoolFactory(AERODROME_FACTORY);
     }
@@ -63,31 +60,18 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
     // TODO: only the execution engine should be able to call this execute method
     // TODO: add methods for fee withdrawal and unstaking
     /// @notice Executes an action
-    function execute(
-        ActionType actionType,
-        bytes calldata data
-    ) external payable override returns (bytes memory) {
+    function execute(ActionType actionType, bytes calldata data) external payable override returns (bytes memory) {
         // TODO: also ensure that the original caller is execution engine
         address executionEngine = msg.sender;
 
         if (actionType == ActionType.SUPPLY) {
-            (
-                uint256 amountA,
-                uint256 amountB,
-                uint256 liquidity
-            ) = _depositBasicLiquidity(data, executionEngine);
+            (uint256 amountA, uint256 amountB, uint256 liquidity) = _depositBasicLiquidity(data, executionEngine);
             return abi.encode(amountA, amountB, liquidity);
         } else if (actionType == ActionType.WITHDRAW) {
-            (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(
-                data,
-                executionEngine
-            );
+            (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(data, executionEngine);
             return abi.encode(amountA, amountB);
         } else if (actionType == ActionType.SWAP) {
-            uint256[] memory amounts = _swapExactTokensForTokens(
-                data,
-                executionEngine
-            );
+            uint256[] memory amounts = _swapExactTokensForTokens(data, executionEngine);
             return abi.encode(amounts);
         } else if (actionType == ActionType.STAKE) {
             return _depositToGauge(data, executionEngine);
@@ -99,20 +83,12 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
     /// @param data The encoded parameters for the desired action
     /// @param caller The address of the original caller
     /// @return amounts The amounts of tokens received for each step of the swap
-    function _swapExactTokensForTokens(
-        bytes calldata data,
-        address caller
-    ) internal returns (uint256[] memory amounts) {
-        (
-            uint256 amountIn,
-            uint256 minReturnAmount,
-            IRouter.Route[] memory routes,
-            address to,
-            uint256 deadline
-        ) = abi.decode(
-                data[4:],
-                (uint256, uint256, IRouter.Route[], address, uint256)
-            );
+    function _swapExactTokensForTokens(bytes calldata data, address caller)
+        internal
+        returns (uint256[] memory amounts)
+    {
+        (uint256 amountIn, uint256 minReturnAmount, IRouter.Route[] memory routes, address to, uint256 deadline) =
+            abi.decode(data[4:], (uint256, uint256, IRouter.Route[], address, uint256));
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
@@ -124,34 +100,20 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
 
         address tokenOut = routes[routes.length - 1].to;
 
-        uint256[] memory expectedAmounts = aerodromeRouter.getAmountsOut(
-            amountIn,
-            routes
-        );
+        uint256[] memory expectedAmounts = aerodromeRouter.getAmountsOut(amountIn, routes);
         uint256 expectedAmountOut = expectedAmounts[expectedAmounts.length - 1];
 
         if (expectedAmountOut < minReturnAmount) {
             revert SlippageExceeded();
         }
 
-        amounts = aerodromeRouter.swapExactTokensForTokens(
-            amountIn,
-            minReturnAmount,
-            routes,
-            to,
-            deadline
-        );
+        amounts = aerodromeRouter.swapExactTokensForTokens(amountIn, minReturnAmount, routes, to, deadline);
 
         if (amounts[amounts.length - 1] < minReturnAmount) {
             revert SlippageExceeded();
         }
 
-        emit Swapped(
-            tokenIn,
-            tokenOut,
-            amounts[0],
-            amounts[amounts.length - 1]
-        );
+        emit Swapped(tokenIn, tokenOut, amounts[0], amounts[amounts.length - 1]);
 
         return amounts;
     }
@@ -163,16 +125,9 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
     /// @return amountAUsed The amount of tokenA actually deposited
     /// @return amountBUsed The amount of tokenB actually deposited
     /// @return liquidityDeposited The amount of liquidity tokens received
-    function _depositBasicLiquidity(
-        bytes calldata data,
-        address caller
-    )
+    function _depositBasicLiquidity(bytes calldata data, address caller)
         internal
-        returns (
-            uint256 amountAUsed,
-            uint256 amountBUsed,
-            uint256 liquidityDeposited
-        )
+        returns (uint256 amountAUsed, uint256 amountBUsed, uint256 liquidityDeposited)
     {
         (
             address tokenA,
@@ -185,21 +140,7 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
             bool balanceTokenRatio,
             address to,
             uint256 deadline
-        ) = abi.decode(
-                data[4:],
-                (
-                    address,
-                    address,
-                    bool,
-                    uint256,
-                    uint256,
-                    uint256,
-                    uint256,
-                    bool,
-                    address,
-                    uint256
-                )
-            );
+        ) = abi.decode(data[4:], (address, address, bool, uint256, uint256, uint256, uint256, bool, address, uint256));
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
@@ -216,41 +157,27 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
         // Balance token ratios
         for (uint256 i = 0; i < 2; i++) {
             if (balanceTokenRatio) {
-                (uint256[] memory amounts, bool sellTokenA) = AerodromeUtils
-                    .balanceTokenRatio(
-                        tokenA,
-                        tokenB,
-                        amountALeft,
-                        amountBLeft,
-                        stable
-                    );
+                (uint256[] memory amounts, bool sellTokenA) =
+                    AerodromeUtils.balanceTokenRatio(tokenA, tokenB, amountALeft, amountBLeft, stable);
 
-                (amountALeft, amountBLeft) = AerodromeUtils.updateAmountsIn(
-                    amountALeft,
-                    amountBLeft,
-                    sellTokenA,
-                    amounts
-                );
+                (amountALeft, amountBLeft) =
+                    AerodromeUtils.updateAmountsIn(amountALeft, amountBLeft, sellTokenA, amounts);
             }
             // Approve tokens to router
             IERC20(tokenA).approve(address(aerodromeRouter), amountALeft);
             IERC20(tokenB).approve(address(aerodromeRouter), amountBLeft);
 
-            (
-                uint256 amountADeposited,
-                uint256 amountBDeposited,
-                uint256 liquidity
-            ) = aerodromeRouter.addLiquidity(
-                    tokenA,
-                    tokenB,
-                    stable,
-                    amountALeft,
-                    amountBLeft,
-                    0,
-                    0,
-                    to,
-                    deadline // 0 amountOutMin because we do checkValueOut()
-                );
+            (uint256 amountADeposited, uint256 amountBDeposited, uint256 liquidity) = aerodromeRouter.addLiquidity(
+                tokenA,
+                tokenB,
+                stable,
+                amountALeft,
+                amountBLeft,
+                0,
+                0,
+                to,
+                deadline // 0 amountOutMin because we do checkValueOut()
+            );
 
             amountALeft -= amountADeposited;
             amountBLeft -= amountBDeposited;
@@ -265,31 +192,12 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
         AerodromeUtils.checkPriceImpact(pool, ratioBefore);
 
         AerodromeUtils.checkValueOut(
-            liquidityDeposited,
-            tokenA,
-            tokenB,
-            stable,
-            amountAMin,
-            amountBMin,
-            amountAIn,
-            amountBIn
+            liquidityDeposited, tokenA, tokenB, stable, amountAMin, amountBMin, amountAIn, amountBIn
         );
 
-        AerodromeUtils.returnLeftovers(
-            tokenA,
-            tokenB,
-            amountALeft,
-            amountBLeft,
-            caller
-        );
+        AerodromeUtils.returnLeftovers(tokenA, tokenB, amountALeft, amountBLeft, caller);
 
-        emit LiquidityAdded(
-            tokenA,
-            tokenB,
-            amountAUsed,
-            amountBUsed,
-            liquidityDeposited
-        );
+        emit LiquidityAdded(tokenA, tokenB, amountAUsed, amountBUsed, liquidityDeposited);
     }
 
     /// @notice Removes liquidity from an Aerodrome pool
@@ -298,10 +206,10 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
     /// @param caller The address of the original caller
     /// @return amountA The amount of tokenA received
     /// @return amountB The amount of tokenB received
-    function _removeBasicLiquidity(
-        bytes calldata data,
-        address caller
-    ) internal returns (uint256 amountA, uint256 amountB) {
+    function _removeBasicLiquidity(bytes calldata data, address caller)
+        internal
+        returns (uint256 amountA, uint256 amountB)
+    {
         (
             address tokenA,
             address tokenB,
@@ -311,19 +219,7 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
             uint256 amountBMin,
             address to,
             uint256 deadline
-        ) = abi.decode(
-                data[4:],
-                (
-                    address,
-                    address,
-                    bool,
-                    uint256,
-                    uint256,
-                    uint256,
-                    address,
-                    uint256
-                )
-            );
+        ) = abi.decode(data[4:], (address, address, bool, uint256, uint256, uint256, address, uint256));
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
@@ -333,16 +229,8 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
         IERC20(pool).transferFrom(caller, address(this), liquidity);
         IERC20(pool).approve(address(aerodromeRouter), liquidity);
 
-        (amountA, amountB) = aerodromeRouter.removeLiquidity(
-            tokenA,
-            tokenB,
-            stable,
-            liquidity,
-            amountAMin,
-            amountBMin,
-            to,
-            deadline
-        );
+        (amountA, amountB) =
+            aerodromeRouter.removeLiquidity(tokenA, tokenB, stable, liquidity, amountAMin, amountBMin, to, deadline);
 
         emit LiquidityRemoved(tokenA, tokenB, amountA, amountB, liquidity);
     }
@@ -351,14 +239,8 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
     /// @param data The encoded parameters for the desired action
     /// @param caller The address of the original caller
     /// @return bytes The encoded result of the deposit
-    function _depositToGauge(
-        bytes calldata data,
-        address caller
-    ) internal returns (bytes memory) {
-        (address gaugeAddress, uint256 amount) = abi.decode(
-            data[4:],
-            (address, uint256)
-        );
+    function _depositToGauge(bytes calldata data, address caller) internal returns (bytes memory) {
+        (address gaugeAddress, uint256 amount) = abi.decode(data[4:], (address, uint256));
 
         address lpToken = IGauge(gaugeAddress).stakingToken();
 
@@ -372,13 +254,9 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
     }
 
     /// @notice Transfers tokens from the caller to the contract
-    function _receiveTokensFromCaller(
-        address tokenA,
-        uint256 amountA,
-        address tokenB,
-        uint256 amountB,
-        address caller
-    ) internal {
+    function _receiveTokensFromCaller(address tokenA, uint256 amountA, address tokenB, uint256 amountB, address caller)
+        internal
+    {
         if (amountA > 0) {
             if (tokenA == WETH && msg.value > 0) {
                 if (msg.value != amountA) revert IncorrectETHAmount();
@@ -416,13 +294,7 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
         uint256 amountB,
         bool balanceTokenRatio
     ) external view returns (uint256 amountAOut, uint256 amountBOut) {
-        (amountAOut, amountBOut) = AerodromeUtils.quoteDepositLiquidity(
-            tokenA,
-            tokenB,
-            stable,
-            amountA,
-            amountB,
-            balanceTokenRatio
-        );
+        (amountAOut, amountBOut) =
+            AerodromeUtils.quoteDepositLiquidity(tokenA, tokenB, stable, amountA, amountB, balanceTokenRatio);
     }
 }
