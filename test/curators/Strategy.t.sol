@@ -3,10 +3,12 @@ pragma solidity ^0.8.13;
 
 import {Test, console, Vm} from "forge-std/Test.sol";
 import {Strategy} from "../../src/curators/strategy.sol";
+import {AerodromeBasicConnector} from "../../src/protocols/dex/base/aerodrome-basic/main.sol";
 import "../../src/curators/interface/IStrategy.sol";
 
 contract StrategyTest is Test {
     Strategy public strategy;
+    AerodromeBasicConnector public aerodromeBasicConnector;
 
     address constant cbBTC = 0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf;
     address constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
@@ -17,10 +19,13 @@ contract StrategyTest is Test {
 
     function setUp() public {
         strategy = new Strategy();
+        aerodromeBasicConnector =
+            new AerodromeBasicConnector("Aero Connector", IConnectorIntegration.ConnectorType.LENDING);
     }
 
     function test_Create_Strategy() public {
         string memory name = "cbBTC";
+        string memory strategyDescription = "cbBTC strategy on base";
         uint256 minDeposit;
         uint256 maxTVL;
         uint256 performanceFee;
@@ -31,11 +36,11 @@ contract StrategyTest is Test {
         address[] memory _assetsIn0 = new address[](1);
         _assetsIn0[0] = cbBTC;
         steps[0] = ILiquidStrategy.Step({
-            protocol: moonwell_cbBTC,
-            actionType: IProtocolIntegration.ActionType.SUPPLY,
+            connector: address(aerodromeBasicConnector),
+            actionType: IConnectorIntegration.ActionType.SUPPLY,
             assetsIn: _assetsIn0,
             assetOut: moonwell_cbBTC,
-            amountRatio: 50,
+            amountRatio: 5000,
             data: hex""
         });
 
@@ -43,11 +48,11 @@ contract StrategyTest is Test {
         address[] memory _assetsIn1 = new address[](1);
         _assetsIn1[0] = moonwell_USDC;
         steps[1] = ILiquidStrategy.Step({
-            protocol: moonwell_USDC,
-            actionType: IProtocolIntegration.ActionType.BORROW,
+            connector: address(aerodromeBasicConnector),
+            actionType: IConnectorIntegration.ActionType.BORROW,
             assetsIn: _assetsIn1,
             assetOut: USDC,
-            amountRatio: 50,
+            amountRatio: 5000,
             data: hex""
         });
 
@@ -56,11 +61,11 @@ contract StrategyTest is Test {
         _assetsIn2[0] = cbBTC;
         _assetsIn2[1] = USDC;
         steps[2] = ILiquidStrategy.Step({
-            protocol: aero_router,
-            actionType: IProtocolIntegration.ActionType.SUPPLY,
+            connector: address(aerodromeBasicConnector),
+            actionType: IConnectorIntegration.ActionType.SUPPLY,
             assetsIn: _assetsIn2,
             assetOut: aero_cbbtc_udsc_lpt,
-            amountRatio: 100,
+            amountRatio: 10_000,
             data: hex""
         });
 
@@ -68,12 +73,12 @@ contract StrategyTest is Test {
         vm.recordLogs();
 
         vm.prank(address(0xAAAA));
-        strategy.createStrategy(name, steps, minDeposit, maxTVL, performanceFee);
+        strategy.createStrategy(name, strategyDescription, steps, minDeposit, maxTVL, performanceFee);
 
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         // assert that strategy Ids are the same
-        bytes32 strategyId = keccak256(abi.encodePacked(address(0xAAAA), name));
+        bytes32 strategyId = keccak256(abi.encodePacked(address(0xAAAA), name, strategyDescription));
         assertEq(entries[0].topics[1], strategyId);
     }
 
