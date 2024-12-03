@@ -6,13 +6,14 @@ interface ILiquidStrategy is IProtocolIntegration {
     struct Step {
         address protocol; // Target protocol
         ActionType actionType; // Action to perform
-        address assetIn; // Input asset
+        address[] assetsIn; // Input asset(s)
         address assetOut; // Output asset
         uint256 amountRatio; // Amount as % of previous step
         bytes data; // Additional parameters
     }
 
     struct Strategy {
+        bytes32 strategyId;
         address curator; // Strategy creator
         string name; // Strategy name
         Step[] steps; // Execution steps
