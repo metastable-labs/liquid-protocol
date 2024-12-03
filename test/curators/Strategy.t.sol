@@ -19,8 +19,7 @@ contract StrategyTest is Test {
 
     function setUp() public {
         strategy = new Strategy();
-        aerodromeBasicConnector =
-            new AerodromeBasicConnector("Aero Connector", IConnectorIntegration.ConnectorType.LENDING);
+        aerodromeBasicConnector = new AerodromeBasicConnector("Aero Connector", IConnector.ConnectorType.LENDING);
     }
 
     function test_Create_Strategy() public {
@@ -37,7 +36,7 @@ contract StrategyTest is Test {
         _assetsIn0[0] = cbBTC;
         steps[0] = ILiquidStrategy.Step({
             connector: address(aerodromeBasicConnector),
-            actionType: IConnectorIntegration.ActionType.SUPPLY,
+            actionType: IConnector.ActionType.SUPPLY,
             assetsIn: _assetsIn0,
             assetOut: moonwell_cbBTC,
             amountRatio: 5000,
@@ -49,7 +48,7 @@ contract StrategyTest is Test {
         _assetsIn1[0] = moonwell_USDC;
         steps[1] = ILiquidStrategy.Step({
             connector: address(aerodromeBasicConnector),
-            actionType: IConnectorIntegration.ActionType.BORROW,
+            actionType: IConnector.ActionType.BORROW,
             assetsIn: _assetsIn1,
             assetOut: USDC,
             amountRatio: 5000,
@@ -62,7 +61,7 @@ contract StrategyTest is Test {
         _assetsIn2[1] = USDC;
         steps[2] = ILiquidStrategy.Step({
             connector: address(aerodromeBasicConnector),
-            actionType: IConnectorIntegration.ActionType.SUPPLY,
+            actionType: IConnector.ActionType.SUPPLY,
             assetsIn: _assetsIn2,
             assetOut: aero_cbbtc_udsc_lpt,
             amountRatio: 10_000,

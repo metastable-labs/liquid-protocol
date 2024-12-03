@@ -91,7 +91,7 @@ contract Strategy {
 
     /**
      * @dev Validate each step in the strategy
-     * @param _steps array representing the individual steps involved in the strategy
+     * @param steps array representing the individual steps involved in the strategy
      */
     function _validateSteps(ILiquidStrategy.Step[] memory steps) internal view returns (bool) {
         for (uint256 i = 0; i < steps.length; i++) {
@@ -102,7 +102,7 @@ contract Strategy {
             for (uint256 j; j < steps[i].assetsIn.length; j++) {
                 require(steps[i].assetsIn[j] != address(0), "Invalid input asset");
             }
-            if (steps[i].actionType != IConnectorIntegration.ActionType.SUPPLY) {
+            if (steps[i].actionType != IConnector.ActionType.SUPPLY) {
                 require(steps[i].assetOut != address(0), "Invalid output asset");
             }
 
@@ -125,21 +125,19 @@ contract Strategy {
      * @param connectorType Type of connector
      * @param actionType Type of action
      */
-    function _isValidActionForConnector(
-        IConnector.ConnectorType connectorType,
-        IConnector.ActionType actionType
-    ) internal pure returns (bool) {
-        if (connectorType == IConnectorIntegration.ConnectorType.LENDING) {
-            return actionType == IConnectorIntegration.ActionType.SUPPLY
-                || actionType == IConnectorIntegration.ActionType.WITHDRAW
-                || actionType == IConnectorIntegration.ActionType.BORROW
-                || actionType == IConnectorIntegration.ActionType.REPAY;
-        } else if (connectorType == IConnectorIntegration.ConnectorType.DEX) {
-            return actionType == IConnectorIntegration.ActionType.SWAP;
-        } else if (connectorType == IConnectorIntegration.ConnectorType.YIELD) {
-            return actionType == IConnectorIntegration.ActionType.STAKE
-                || actionType == IConnectorIntegration.ActionType.UNSTAKE
-                || actionType == IConnectorIntegration.ActionType.CLAIM;
+    function _isValidActionForConnector(IConnector.ConnectorType connectorType, IConnector.ActionType actionType)
+        internal
+        pure
+        returns (bool)
+    {
+        if (connectorType == IConnector.ConnectorType.LENDING) {
+            return actionType == IConnector.ActionType.SUPPLY || actionType == IConnector.ActionType.WITHDRAW
+                || actionType == IConnector.ActionType.BORROW || actionType == IConnector.ActionType.REPAY;
+        } else if (connectorType == IConnector.ConnectorType.DEX) {
+            return actionType == IConnector.ActionType.SWAP;
+        } else if (connectorType == IConnector.ConnectorType.YIELD) {
+            return actionType == IConnector.ActionType.STAKE || actionType == IConnector.ActionType.UNSTAKE
+                || actionType == IConnector.ActionType.CLAIM;
         }
 
         return false;
