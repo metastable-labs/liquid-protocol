@@ -110,7 +110,7 @@ contract Strategy {
             require(steps[i].amountRatio > 0 && steps[i].amountRatio <= 10_000, "Invalid amount ratio"); // Max 100%
 
             // Validate connector supports action
-            IConnectorIntegration connector = IConnectorIntegration(steps[i].connector);
+            IConnector connector = IConnector(steps[i].connector);
             require(
                 _isValidActionForConnector(connector.getConnectorType(), steps[i].actionType),
                 "Invalid action for connector type"
