@@ -10,6 +10,12 @@ contract Strategy {
     // strategyId => stats
     mapping(bytes32 => ILiquidStrategy.StrategyStats) public strategyStats;
 
+    // strategyId => user => userStats
+    mapping(bytes32 => mapping(address => ILiquidStrategy.UserStats)) public userStats;
+
+    // user => strategyIds
+    mapping(address => bytes32[]) public userStrategies;
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                          EVENTS                            */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -102,6 +108,49 @@ contract Strategy {
 
     function getStrategyStats(bytes32 _strategyId) public view returns (ILiquidStrategy.StrategyStats memory) {
         return strategyStats[_strategyId];
+    }
+    /**
+     * @dev Get user's balance for a specific asset in a strategy
+     * @param _strategyId ID of the strategy
+     * @param _user Address of the user
+     * @param _asset Address of the token to check balance for
+     * @return AssetBalance struct containing token balance details
+     */
+
+    function getUserAssetBalance(bytes32 _strategyId, address _user, address _asset)
+        public
+        view
+        returns (ILiquidStrategy.AssetBalance memory)
+    {
+        ILiquidStrategy.UserStats storage stats = userStats[_strategyId][_user];
+        for (uint256 i = 0; i < stats.tokenBalances.length; i++) {
+            if (stats.tokenBalances[i].asset == _asset) {
+                return stats.tokenBalances[i];
+            }
+        }
+        return ILiquidStrategy.AssetBalance(_asset, 0, 0, 0);
+    }
+
+    /**
+     * @dev Get user's share balance for a specific protocol and LP token in a strategy
+     * @param _strategyId ID of the strategy
+     * @param _user Address of the user
+     * @param _protocol Address of the protocol (e.g. Aerodrome)
+     * @param _lpToken Address of the LP token
+     * @return ShareBalance struct containing share balance details
+     */
+    function getUserShareBalance(bytes32 _strategyId, address _user, address _protocol, address _lpToken)
+        public
+        view
+        returns (ILiquidStrategy.ShareBalance memory)
+    {
+        ILiquidStrategy.UserStats storage stats = userStats[_strategyId][_user];
+        for (uint256 i = 0; i < stats.shareBalances.length; i++) {
+            if (stats.shareBalances[i].protocol == _protocol && stats.shareBalances[i].lpToken == _lpToken) {
+                return stats.shareBalances[i];
+            }
+        }
+        return ILiquidStrategy.ShareBalance(_protocol, _lpToken, 0, new address[](0), new uint256[](0), 0);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
