@@ -6,13 +6,13 @@ import {IRouter} from "@aerodrome/contracts/contracts/interfaces/IRouter.sol";
 import {IPool} from "@aerodrome/contracts/contracts/interfaces/IPool.sol";
 import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/IPoolFactory.sol";
 
-import {BaseProtocol} from "../../../BaseProtocol.sol";
-import {Constants} from "../common/constant.sol";
+import {BaseConnector} from "../../../../BaseConnector.sol";
+import {Constants} from "../../../common/constant.sol";
 import {AerodromeUtils} from "./utils.sol";
 import "./interface.sol";
 import "./events.sol";
 
-contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
+contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
     /* ========== STATE VARIABLES ========== */
 
     /// @notice Router contract for executing Aerodrome trades and liquidity operations
@@ -47,10 +47,10 @@ contract AerodromeBasicProtocol is BaseProtocol, Constants, AerodromeEvents {
     /// @notice Thrown when trying to interact with a non-existent pool
     error PoolDoesNotExist();
 
-    /// @notice Initializes the AerodromeProtocol
-    /// @param name Name of the Protocol
-    /// @param protocolType Type of protocol
-    constructor(string memory name, ProtocolType protocolType) BaseProtocol(name, protocolType) {
+    /// @notice Initializes the AerodromeConnector
+    /// @param name Name of the Connector
+    /// @param connectorType Type of connector
+    constructor(string memory name, ConnectorType connectorType) BaseConnector(name, connectorType) {
         aerodromeRouter = IRouter(AERODROME_ROUTER);
         aerodromeFactory = IPoolFactory(AERODROME_FACTORY);
     }
