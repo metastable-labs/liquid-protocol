@@ -7,6 +7,9 @@ contract Strategy {
     // curator => array of strategies
     mapping(address => ILiquidStrategy.Strategy[]) curatorStrategies;
 
+    // strategy ID => strategies
+    mapping(bytes32 => ILiquidStrategy.Strategy) public strategies;
+
     // strategyId => stats
     mapping(bytes32 => ILiquidStrategy.StrategyStats) public strategyStats;
 
@@ -15,6 +18,9 @@ contract Strategy {
 
     // user => strategyIds
     mapping(address => bytes32[]) public userStrategies;
+
+    // Array to keep track of all strategy IDs
+    bytes32[] public allStrategyIds;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                          EVENTS                            */
@@ -42,6 +48,10 @@ contract Strategy {
         uint256 performanceFee
     );
 
+    error StrategyNotFound(bytes32 strategyId);
+    error StrategyAlreadyExists(bytes32 strategyId);
+    error Unauthorized(address caller);
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       PUBLIC FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -64,6 +74,11 @@ contract Strategy {
         uint256 _performanceFee
     ) public {
         bytes32 _strategyId = keccak256(abi.encodePacked(msg.sender, _name, _strategyDescription));
+        // Check if strategy already exists
+        if (strategies[_strategyId].curator != address(0)) {
+            revert StrategyAlreadyExists(_strategyId);
+        }
+
         ILiquidStrategy.Strategy memory _strategy = ILiquidStrategy.Strategy({
             strategyId: _strategyId,
             curator: msg.sender,
@@ -78,8 +93,12 @@ contract Strategy {
         // Validate curator's strategy steps
         require(_validateSteps(_steps), "Invalid steps");
 
+        // Store strategy in all relevant mappings
+        strategies[_strategyId] = _strategy;
         // Store curator's strategy
         curatorStrategies[msg.sender].push(_strategy);
+        // Add to array of all strategy IDs
+        allStrategyIds.push(_strategyId);
 
         // Initialize strategy stats
         strategyStats[_strategyId] = ILiquidStrategy.StrategyStats({
@@ -96,6 +115,18 @@ contract Strategy {
 
     /**
      * @dev Get all strategies for a curator
+     * @param _strategyId address of the user that created the strategies
+     */
+    function getStrategy(bytes32 _strategyId) public view returns (ILiquidStrategy.Strategy memory) {
+        ILiquidStrategy.Strategy memory strategy = strategies[_strategyId];
+        if (strategy.curator == address(0)) {
+            revert StrategyNotFound(_strategyId);
+        }
+        return strategy;
+    }
+
+    /**
+     * @dev Get all strategies for a curator
      * @param _curator address of the user that created the strategies
      */
     function getStrategy(address _curator) public view returns (ILiquidStrategy.Strategy[] memory) {
@@ -108,6 +139,38 @@ contract Strategy {
 
     function getStrategyStats(bytes32 _strategyId) public view returns (ILiquidStrategy.StrategyStats memory) {
         return strategyStats[_strategyId];
+    }
+
+    /**
+     * @dev Get all strategies
+     * @return allStrategies Array of all strategies
+     */
+    function getAllStrategies() public view returns (ILiquidStrategy.Strategy[] memory) {
+        uint256 length = allStrategyIds.length;
+        ILiquidStrategy.Strategy[] memory allStrategies = new ILiquidStrategy.Strategy[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            allStrategies[i] = strategies[allStrategyIds[i]];
+        }
+
+        return allStrategies;
+    }
+
+    /**
+     * @dev Get total number of strategies
+     * @return Total number of strategies
+     */
+    function getTotalStrategies() public view returns (uint256) {
+        return allStrategyIds.length;
+    }
+
+    /**
+     * @dev Get all strategies that a user has participated in
+     * @param _user address of the user to get strategies for
+     * @return array of strategy IDs the user has participated in
+     */
+    function getUserStrategies(address _user) public view returns (bytes32[] memory) {
+        return userStrategies[_user];
     }
     /**
      * @dev Get user's balance for a specific asset in a strategy
