@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.12;
 
-interface IConnectorIntegration {
+interface IConnector {
     /// @notice Core actions that a protocol can perform
     enum ActionType {
         SUPPLY, // Supply assets
