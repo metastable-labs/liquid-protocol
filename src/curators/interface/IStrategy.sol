@@ -2,7 +2,7 @@ pragma solidity ^0.8.20;
 
 import "../../interface/IConnector.sol";
 
-interface ILiquidStrategy is IConnectorIntegration {
+interface ILiquidStrategy is IConnector {
     struct Step {
         address connector; // Target connector
         ActionType actionType; // Action to perform
