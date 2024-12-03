@@ -126,8 +126,8 @@ contract Strategy {
      * @param actionType Type of action
      */
     function _isValidActionForConnector(
-        IConnectorIntegration.ConnectorType connectorType,
-        IConnectorIntegration.ActionType actionType
+        IConnector.ConnectorType connectorType,
+        IConnector.ActionType actionType
     ) internal pure returns (bool) {
         if (connectorType == IConnectorIntegration.ConnectorType.LENDING) {
             return actionType == IConnectorIntegration.ActionType.SUPPLY
