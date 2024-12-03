@@ -22,4 +22,11 @@ interface ILiquidStrategy is IConnector {
         uint256 maxTVL; // Maximum TVL
         uint256 performanceFee; // Curator fee (basis points)
     }
+
+    struct StrategyStats {
+        uint256 totalDeposits; // Total amount deposited (total tvl)
+        uint256 totalUsers; // Total unique users
+        uint256 totalFeeGenerated; // Total fees generated
+        uint256 lastUpdated; // Last stats update timestamp
+    }
 }
