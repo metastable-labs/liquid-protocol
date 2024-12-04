@@ -12,7 +12,7 @@ contract Oracle {
      * @param _sequencerUptimeFeed uptime feed address on base network
      * @param _dataFeed data feed address on base network
      */
-    function getLatestAnswer(address _sequencerUptimeFeed, address _dataFeed) internal view returns (int256) {
+    function getLatestAnswer(address _sequencerUptimeFeed, address _dataFeed) public view returns (int256) {
         (, int256 answer, uint256 startedAt,,) = IOracle(_sequencerUptimeFeed).latestRoundData();
 
         // Answer == 0: Sequencer is up
@@ -31,6 +31,33 @@ contract Oracle {
 
         (, int256 price,,,) = IOracle(_dataFeed).latestRoundData();
 
-        return price; // / 10 ** 8; // returns usd value w/o decimals
+        return price; // returns usd value scaled to 8 decimal
+    }
+
+    /**
+     * @dev Calculates the price of 1 tokenA in terms of tokenB, normalizing decimal differences.
+     * @param tokenAPriceInUsd The price of 1 tokenA in USD.
+     * @param tokenAPriceDecimals The number of decimals in the tokenA price.
+     * @param tokenBPriceInUsd The price of 1 tokenB in USD.
+     * @param tokenBPriceDecimals The number of decimals in the tokenB price.
+     */
+    function getTokenAPriceInTokenB(
+        uint256 tokenAPriceInUsd,
+        uint8 tokenAPriceDecimals,
+        uint256 tokenBPriceInUsd,
+        uint8 tokenBPriceDecimals
+    ) public pure returns (uint256) {
+        require(tokenAPriceInUsd > 0, "tokenA price must be greater than zero");
+        require(tokenBPriceInUsd > 0, "tokenB price must be greater than zero");
+
+        // Normalize to the same decimal scale
+        if (tokenAPriceDecimals > tokenBPriceDecimals) {
+            tokenBPriceInUsd *= 10 ** (tokenAPriceDecimals - tokenBPriceDecimals);
+        } else if (tokenBPriceDecimals > tokenAPriceDecimals) {
+            tokenAPriceInUsd *= 10 ** (tokenBPriceDecimals - tokenAPriceDecimals);
+        }
+
+        // Calculate price: (tokenA / tokenB)
+        return (tokenAPriceInUsd * 1e18) / tokenBPriceInUsd; // Returns result scaled to 18 decimals
     }
 }
