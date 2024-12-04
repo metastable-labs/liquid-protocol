@@ -59,4 +59,28 @@ interface ILiquidStrategy is IConnector {
         AssetBalance[] tokenBalances; // Individual token balances
         ShareBalance[] shareBalances; // Protocol-specific share balances (LP tokens etc)
     }
+
+    /**
+     * @dev Create a strategy
+     * @param _name descriptive, human-readable name for the strategy
+     * @param _strategyDescription human-readable description for the strategy
+     * @param _steps array representing the individual steps involved in the strategy
+     * @param _minDeposit minimum amount of liquidity a user must provide to participate in the strategy
+     * @param _maxTVL maximum total value of liquidity allowed in the strategy
+     * @param _performanceFee fee charged on the strategy
+     */
+    function createStrategy(
+        string memory _name,
+        string memory _strategyDescription,
+        Step[] memory _steps,
+        uint256 _minDeposit,
+        uint256 _maxTVL,
+        uint256 _performanceFee
+    ) external;
+
+    /**
+     * @dev Get all strategies for a curator
+     * @param _strategyId address of the user that created the strategies
+     */
+    function getStrategy(bytes32 _strategyId) external view returns (Strategy memory);
 }

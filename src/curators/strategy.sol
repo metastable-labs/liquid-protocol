@@ -48,6 +48,10 @@ contract Strategy {
         uint256 performanceFee
     );
 
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                           ERROR                            */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
     error StrategyNotFound(bytes32 strategyId);
     error StrategyAlreadyExists(bytes32 strategyId);
     error Unauthorized(address caller);
@@ -115,7 +119,7 @@ contract Strategy {
 
     /**
      * @dev Get all strategies for a curator
-     * @param _strategyId address of the user that created the strategies
+     * @param _strategyId  of the user that created the strategies
      */
     function getStrategy(bytes32 _strategyId) public view returns (ILiquidStrategy.Strategy memory) {
         ILiquidStrategy.Strategy memory strategy = strategies[_strategyId];
@@ -132,11 +136,11 @@ contract Strategy {
     function getStrategy(address _curator) public view returns (ILiquidStrategy.Strategy[] memory) {
         return curatorStrategies[_curator];
     }
+
     /**
      * @dev Get data on a particular strategy
      * @param _strategyId ID of a strategy
      */
-
     function getStrategyStats(bytes32 _strategyId) public view returns (ILiquidStrategy.StrategyStats memory) {
         return strategyStats[_strategyId];
     }
