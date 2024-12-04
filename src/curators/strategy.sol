@@ -118,8 +118,8 @@ contract Strategy {
     }
 
     /**
-     * @dev Get all strategies for a curator
-     * @param _strategyId  of the user that created the strategies
+     * @dev Get strategy by strategy id
+     * @param _strategyId strategy identity
      */
     function getStrategy(bytes32 _strategyId) public view returns (ILiquidStrategy.Strategy memory) {
         ILiquidStrategy.Strategy memory strategy = strategies[_strategyId];
