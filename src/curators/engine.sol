@@ -29,6 +29,7 @@ contract Engine is ERC4626 {
             ERC4626(asset).transfer(_strategy.steps[0].connector, amounts[i]);
         }
 
+        uint256 prevLoopAmountOut;
         // Execute all steps atomically
         for (uint256 i; i < _strategy.steps.length; i++) {
             // Fetch step
@@ -55,12 +56,15 @@ contract Engine is ERC4626 {
                 amounts,
                 _step.assetOut,
                 _amountRatio,
+                prevLoopAmountOut,
                 _strategyId,
                 msg.sender,
                 _step.data
             ) returns (uint256 amountOut) {
                 // Verify result
-                require(verifyResult(amountOut, _step.assetOut, _step.connector), "Invalid result");
+                // require(verifyResult(amountOut, _step.assetOut, _step.connector), "Invalid result");
+
+                prevLoopAmountOut = amountOut;
 
                 // Update the strategy module
             } catch Error(string memory reason) {

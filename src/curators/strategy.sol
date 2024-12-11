@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GNU
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interface/IStrategy.sol";
 
 contract Strategy {
@@ -55,6 +56,20 @@ contract Strategy {
     error StrategyNotFound(bytes32 strategyId);
     error StrategyAlreadyExists(bytes32 strategyId);
     error Unauthorized(address caller);
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                       MODIFIERS                            */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    // modifier onlyConnectors() {
+    //     require(msg.sender == connectors, "Not connectors");
+    //     _;
+    // }
+
+    // modifier onlyEngine() {
+    //     require(msg.sender == engine, "Not engine");
+    //     _;
+    // }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       PUBLIC FUNCTIONS                     */
@@ -116,6 +131,11 @@ contract Strategy {
         emit CreateStrategy(
             _strategyId, msg.sender, _name, _strategyDescription, _steps, _minDeposit, _maxTVL, _performanceFee
         );
+    }
+
+    function transferToken(address _token, uint256 _amount) public returns (bool) {
+        // check if amount equals or more than available balance first
+        return IERC20(_token).transfer(msg.sender, _amount);
     }
 
     /**

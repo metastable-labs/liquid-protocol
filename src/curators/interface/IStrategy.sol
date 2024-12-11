@@ -78,6 +78,8 @@ interface ILiquidStrategy is IConnector {
         uint256 _performanceFee
     ) external;
 
+    function transferToken(address _token, uint256 _amount) external returns (bool);
+
     function updateUserStats(
         bytes32 _strategyId,
         address _userAddress,

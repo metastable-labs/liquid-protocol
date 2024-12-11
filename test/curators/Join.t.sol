@@ -6,7 +6,7 @@ import {Engine} from "../../src/curators/engine.sol";
 import {Oracle} from "../../src/curators/oracle.sol";
 import {Strategy} from "../../src/curators/strategy.sol";
 import {AerodromeBasicConnector} from "../../src/protocols/dex/base/aerodrome-basic/main.sol";
-import {MoonwellConnector} from "../../src/protocols/dex/lending/base/moonwell/main.sol";
+import {MoonwellConnector} from "../../src/protocols/lending/base/moonwell/main.sol";
 import "../../src/curators/interface/IStrategy.sol";
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";

@@ -3,12 +3,12 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {BaseConnector} from "../../../../../BaseConnector.sol";
-import {Constants} from "../../../../common/constant.sol";
-import "../../../../../interface/IConnector.sol";
-import "../../../../../curators/interface/IStrategy.sol";
-import "../../../../../curators/interface/IEngine.sol";
-import "../../../../../curators/interface/IOracle.sol";
+import {BaseConnector} from "../../../../BaseConnector.sol";
+import {Constants} from "../../../common/constant.sol";
+import "../../../../interface/IConnector.sol";
+import "../../../../curators/interface/IStrategy.sol";
+import "../../../../curators/interface/IEngine.sol";
+import "../../../../curators/interface/IOracle.sol";
 import "./interface.sol";
 import "./events.sol";
 
@@ -44,6 +44,7 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         uint256[] memory amounts,
         address assetOut,
         uint256 amountRatio,
+        uint256 prevLoopAmountOut,
         bytes32 strategyId,
         address userAddress,
         bytes calldata data
@@ -53,7 +54,7 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         if (actionType == IConnector.ActionType.SUPPLY) {
             return _mintToken(assetsIn[0], assetOut, amounts[0], strategyId, userAddress);
         } else if (actionType == IConnector.ActionType.BORROW) {
-            return _borrowToken(assetsIn, assetOut, amounts[0], amountRatio, strategyId, userAddress);
+            return _borrowToken(assetsIn, assetOut, amounts[0], amountRatio, prevLoopAmountOut, strategyId, userAddress);
         }
         // else if (actionType == IConnector.ActionType.SWAP) {
         //     uint256[] memory amounts = _swapExactTokensForTokens(data, executionEngine);
@@ -74,7 +75,6 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         uint256 success = MErc20Interface(assetOut).mint(amount);
         if (success != 0) revert();
 
-        // update user info
         address[] memory underlyingTokens = new address[](1);
         underlyingTokens[0] = assetIn;
 
@@ -86,6 +86,10 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         (int256 _priceInUsd,) = _tokenAandTokenBPriceInUsd(assetIn, address(0));
         uint256 amountInUsd = (uint256(_priceInUsd) * amount) / 10 ** ERC20(assetIn).decimals();
 
+        // transfer token to Strategy Module
+        require(_transferToken(assetOut, shareAmount), "Invalid token amount");
+
+        // update user info
         strategyModule.updateUserStats(
             strategyId,
             userAddress,
@@ -108,9 +112,13 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         address assetOut,
         uint256 amount,
         uint256 amountRatio,
+        uint256 prevLoopAmountOut,
         bytes32 strategyId,
         address userAddress
     ) internal returns (uint256) {
+        // transfer token from Strategy Module
+        require(strategyModule.transferToken(assetsIn[1], prevLoopAmountOut), "Not enough collateral token");
+
         // expects 3: assetsIn [token(cbBtc), collateralToken(mw_cbBtc), borrowContract(mw_usdc)]
 
         // to borrow, first enter market by calling enterMarkets in comptroller
@@ -151,6 +159,10 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
     }
 
     // Helper function
+    function _transferToken(address _token, uint256 _amount) internal returns (bool) {
+        return ERC20(_token).transfer(address(strategyModule), _amount);
+    }
+
     function _getOneTokenAPriceInTokenB(address _tokenA, address _tokenB) internal returns (uint256) {
         (int256 _tokenAPriceInUsd, int256 _tokenBPriceInUsd) = _tokenAandTokenBPriceInUsd(_tokenA, _tokenB);
 

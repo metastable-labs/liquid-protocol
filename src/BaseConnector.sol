@@ -53,6 +53,7 @@ abstract contract BaseConnector is IConnector {
         uint256[] memory amounts,
         address assetOut,
         uint256 amountRatio,
+        uint256 prevLoopAmountOut,
         bytes32 strategyId,
         address userAddress,
         bytes calldata data
