@@ -65,7 +65,7 @@ jobs:
 
       - name: Deploy to Mainnet Beta
         run: |
-          echo -e "\n" | ./shell/deploy.sh | tee deployment.log
+          echo -e "\n" | ./shell/deploy.sh --network=base | tee deployment.log
         env:
           CI: true
 
@@ -126,7 +126,7 @@ jobs:
 
       - name: Deploy to Mainnet
         run: |
-          echo -e "\n" | ./shell/deploy.sh | tee deployment.log
+          echo -e "\n" | ./shell/deploy.sh --network=base | tee deployment.log
         env:
           CI: true
 
