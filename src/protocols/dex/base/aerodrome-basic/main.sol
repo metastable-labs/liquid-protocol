@@ -60,21 +60,35 @@ contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
     // TODO: only the execution engine should be able to call this execute method
     // TODO: add methods for fee withdrawal and unstaking
     /// @notice Executes an action
-    function execute(ActionType actionType, bytes calldata data) external payable override returns (bytes memory) {
+    function execute(
+        ActionType actionType,
+        address[] memory assetsIn,
+        uint256[] memory amounts,
+        address assetOut,
+        uint256 amountRatio,
+        uint256 prevLoopAmountOut,
+        bytes32 strategyId,
+        address userAddress,
+        bytes calldata data
+    ) external payable override returns (uint256) {
         // TODO: also ensure that the original caller is execution engine
         address executionEngine = msg.sender;
 
         if (actionType == ActionType.SUPPLY) {
             (uint256 amountA, uint256 amountB, uint256 liquidity) = _depositBasicLiquidity(data, executionEngine);
-            return abi.encode(amountA, amountB, liquidity);
+            // return abi.encode(amountA, amountB, liquidity);
+            return 1;
         } else if (actionType == ActionType.WITHDRAW) {
             (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(data, executionEngine);
-            return abi.encode(amountA, amountB);
+            // return abi.encode(amountA, amountB);
+            return 1;
         } else if (actionType == ActionType.SWAP) {
             uint256[] memory amounts = _swapExactTokensForTokens(data, executionEngine);
-            return abi.encode(amounts);
+            // return abi.encode(amounts);
+            return 1;
         } else if (actionType == ActionType.STAKE) {
-            return _depositToGauge(data, executionEngine);
+            // return _depositToGauge(data, executionEngine);
+            return 1;
         }
         revert InvalidAction();
     }

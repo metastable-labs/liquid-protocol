@@ -18,6 +18,19 @@ abstract contract Constants {
     address internal constant ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
     address internal constant USDC_USD = 0x7e860098F58bBFC8648a4311b374B1D669a2bc6B;
 
+    // Tokens
+    address internal constant CBBTC = 0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf;
+    address internal constant DAI = 0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb;
+    address internal constant ETH = 0x4200000000000000000000000000000000000006;
+    address internal constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+
+    // Oracle
+    address internal constant ORACLE = 0x333Cd307bd0d8fDB3c38b14eacC4072FF548176B;
+    address internal constant ENGINE = 0xe7D11A96aB3813D8232a0711D4fa4f60E2f50B19;
+
+    // Moonwell Basic contracts
+    address internal constant COMPTROLLER = 0xfBb21d0380beE3312B33c4353c8936a0F13EF26C;
+
     // Aerodrome Basic contracts
     address internal constant AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
     address internal constant AERODROME_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;

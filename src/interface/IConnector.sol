@@ -24,5 +24,15 @@ interface IConnector {
     function getConnectorName() external view returns (bytes32);
     function getConnectorType() external view returns (ConnectorType);
     /// @notice Standard action execution interface
-    function execute(ActionType actionType, bytes calldata data) external payable returns (bytes memory result);
+    function execute(
+        ActionType actionType,
+        address[] memory assetsIn,
+        uint256[] memory amounts,
+        address assetOut,
+        uint256 amountRatio,
+        uint256 prevLoopAmountOut,
+        bytes32 strategyId,
+        address userAddress,
+        bytes calldata data
+    ) external payable returns (uint256 amountOut);
 }
