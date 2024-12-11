@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GNU
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interface/IStrategy.sol";
 
 contract Strategy {
@@ -57,6 +58,20 @@ contract Strategy {
     error Unauthorized(address caller);
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                       MODIFIERS                            */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    // modifier onlyConnectors() {
+    //     require(msg.sender == connectors, "Not connectors");
+    //     _;
+    // }
+
+    // modifier onlyEngine() {
+    //     require(msg.sender == engine, "Not engine");
+    //     _;
+    // }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       PUBLIC FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
@@ -104,9 +119,10 @@ contract Strategy {
         // Add to array of all strategy IDs
         allStrategyIds.push(_strategyId);
 
+        uint256[] memory _totalDeposits = new uint256[](_steps[0].assetsIn.length);
         // Initialize strategy stats
         strategyStats[_strategyId] = ILiquidStrategy.StrategyStats({
-            totalDeposits: 0,
+            totalDeposits: _totalDeposits,
             totalUsers: 0,
             totalFeeGenerated: 0,
             lastUpdated: block.timestamp
@@ -115,6 +131,77 @@ contract Strategy {
         emit CreateStrategy(
             _strategyId, msg.sender, _name, _strategyDescription, _steps, _minDeposit, _maxTVL, _performanceFee
         );
+    }
+
+    function transferToken(address _token, uint256 _amount) public returns (bool) {
+        // check if amount equals or more than available balance first
+        return IERC20(_token).transfer(msg.sender, _amount);
+    }
+
+    /**
+     * @dev Update user stats
+     */
+    function updateUserStats(
+        bytes32 _strategyId,
+        address _userAddress,
+        address _asset,
+        address _protocol,
+        address _shareToken,
+        address[] memory _underlyingTokens,
+        uint256 _assetAmount,
+        uint256 _amountInUsd,
+        uint256 _shareAmount,
+        uint256[] memory _underlyingAmounts
+    ) public {
+        // Get user's stats
+        ILiquidStrategy.UserStats storage _userStats = userStats[_strategyId][_userAddress];
+
+        ILiquidStrategy.AssetBalance memory tempAssetBal = ILiquidStrategy.AssetBalance({
+            asset: _asset,
+            amount: _assetAmount,
+            usdValue: _amountInUsd,
+            lastUpdated: block.timestamp
+        });
+
+        ILiquidStrategy.ShareBalance memory tempShareBal = ILiquidStrategy.ShareBalance({
+            protocol: _protocol,
+            shareToken: _shareToken,
+            shareAmount: _shareAmount,
+            underlyingTokens: _underlyingTokens,
+            underlyingAmounts: _underlyingAmounts,
+            lastUpdated: block.timestamp
+        });
+
+        //
+        if (_userStats.initialDeposit == 0) {
+            _userStats.initialDeposit = _amountInUsd;
+            _userStats.totalDepositedUSD = _amountInUsd;
+            _userStats.joinTimestamp = block.timestamp;
+
+            _userStats.tokenBalances.push(tempAssetBal);
+            _userStats.shareBalances.push(tempShareBal);
+        } else {
+            // totalWithdrawnUSD, totalReward, feesPaid
+            _userStats.totalDepositedUSD += _amountInUsd;
+
+            _userStats.tokenBalances.push(tempAssetBal);
+            _userStats.shareBalances.push(tempShareBal);
+        }
+    }
+
+    /**
+     * @dev Update strategy stats
+     */
+    function updateStrategyStats(bytes32 strategyId, uint256[] memory amounts, uint256 performanceFee) public {
+        ILiquidStrategy.StrategyStats storage _strategyStats = strategyStats[strategyId];
+
+        for (uint256 i; i < amounts.length; i++) {
+            _strategyStats.totalDeposits[i] += amounts[i];
+        }
+
+        _strategyStats.totalUsers++;
+        _strategyStats.totalFeeGenerated += performanceFee;
+        _strategyStats.lastUpdated = block.timestamp;
     }
 
     /**
@@ -189,7 +276,7 @@ contract Strategy {
         view
         returns (ILiquidStrategy.AssetBalance memory)
     {
-        ILiquidStrategy.UserStats storage stats = userStats[_strategyId][_user];
+        ILiquidStrategy.UserStats memory stats = userStats[_strategyId][_user];
         for (uint256 i = 0; i < stats.tokenBalances.length; i++) {
             if (stats.tokenBalances[i].asset == _asset) {
                 return stats.tokenBalances[i];
@@ -199,25 +286,25 @@ contract Strategy {
     }
 
     /**
-     * @dev Get user's share balance for a specific protocol and LP token in a strategy
+     * @dev Get user's share balance for a specific protocol and Share token in a strategy
      * @param _strategyId ID of the strategy
      * @param _user Address of the user
      * @param _protocol Address of the protocol (e.g. Aerodrome)
-     * @param _lpToken Address of the LP token
+     * @param _shareToken Address of the Share token
      * @return ShareBalance struct containing share balance details
      */
-    function getUserShareBalance(bytes32 _strategyId, address _user, address _protocol, address _lpToken)
+    function getUserShareBalance(bytes32 _strategyId, address _user, address _protocol, address _shareToken)
         public
         view
         returns (ILiquidStrategy.ShareBalance memory)
     {
-        ILiquidStrategy.UserStats storage stats = userStats[_strategyId][_user];
+        ILiquidStrategy.UserStats memory stats = userStats[_strategyId][_user];
         for (uint256 i = 0; i < stats.shareBalances.length; i++) {
-            if (stats.shareBalances[i].protocol == _protocol && stats.shareBalances[i].lpToken == _lpToken) {
+            if (stats.shareBalances[i].protocol == _protocol && stats.shareBalances[i].shareToken == _shareToken) {
                 return stats.shareBalances[i];
             }
         }
-        return ILiquidStrategy.ShareBalance(_protocol, _lpToken, 0, new address[](0), new uint256[](0), 0);
+        return ILiquidStrategy.ShareBalance(_protocol, _shareToken, 0, new address[](0), new uint256[](0), 0);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

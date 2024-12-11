@@ -45,11 +45,17 @@ abstract contract BaseConnector is IConnector {
      * @dev This function must be implemented by derived contracts
      * @param actionType The Core actions that a connector can perform
      * @param data The calldata for the function call containing the parameters
-     * @return result The return data from the function call
+     * @return amountOut The amount out from the function call
      */
-    function execute(ActionType actionType, bytes calldata data)
-        external
-        payable
-        virtual
-        returns (bytes memory result);
+    function execute(
+        ActionType actionType,
+        address[] memory assetsIn,
+        uint256[] memory amounts,
+        address assetOut,
+        uint256 amountRatio,
+        uint256 prevLoopAmountOut,
+        bytes32 strategyId,
+        address userAddress,
+        bytes calldata data
+    ) external payable virtual returns (uint256 amountOut);
 }

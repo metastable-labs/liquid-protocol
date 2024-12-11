@@ -24,7 +24,7 @@ interface ILiquidStrategy is IConnector {
     }
 
     struct StrategyStats {
-        uint256 totalDeposits; // Total amount deposited (total tvl)
+        uint256[] totalDeposits; // Total amount deposited (total tvl)
         uint256 totalUsers; // Total unique users
         uint256 totalFeeGenerated; // Total fees generated
         uint256 lastUpdated; // Last stats update timestamp
@@ -39,8 +39,8 @@ interface ILiquidStrategy is IConnector {
 
     struct ShareBalance {
         address protocol; // Protocol address (e.g., Aerodrome)
-        address lpToken; // LP token address
-        uint256 lpAmount; // Amount of LP tokens
+        address shareToken; // Share token address
+        uint256 shareAmount; // Amount of Share tokens
         address[] underlyingTokens; // Underlying token addresses
         uint256[] underlyingAmounts; // Amounts of underlying tokens
         uint256 lastUpdated; // Last balance update timestamp
@@ -77,6 +77,23 @@ interface ILiquidStrategy is IConnector {
         uint256 _maxTVL,
         uint256 _performanceFee
     ) external;
+
+    function transferToken(address _token, uint256 _amount) external returns (bool);
+
+    function updateUserStats(
+        bytes32 _strategyId,
+        address _userAddress,
+        address _asset,
+        address _protocol,
+        address _shareToken,
+        address[] memory _underlyingTokens,
+        uint256 _assetAmount,
+        uint256 _amountInUsd,
+        uint256 _shareAmount,
+        uint256[] memory _underlyingAmounts
+    ) external;
+
+    function updateStrategyStats(bytes32 strategyId, uint256[] memory amounts, uint256 performanceFee) external;
 
     /**
      * @dev Get strategy by strategy id
@@ -132,10 +149,10 @@ interface ILiquidStrategy is IConnector {
      * @param _strategyId ID of the strategy
      * @param _user Address of the user
      * @param _protocol Address of the protocol (e.g. Aerodrome)
-     * @param _lpToken Address of the LP token
+     * @param _shareToken Address of the LP token
      * @return ShareBalance struct containing share balance details
      */
-    function getUserShareBalance(bytes32 _strategyId, address _user, address _protocol, address _lpToken)
+    function getUserShareBalance(bytes32 _strategyId, address _user, address _protocol, address _shareToken)
         external
         view
         returns (ShareBalance memory);
