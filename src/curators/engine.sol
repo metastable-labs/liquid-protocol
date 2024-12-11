@@ -8,6 +8,19 @@ contract Engine is ERC4626 {
     // might change later
     ILiquidStrategy strategyModule;
 
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                          EVENTS                            */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /**
+     * @dev Emitted when a user joins a strategy
+     * @param strategyId unique identifier for the strategy
+     * @param depositor address of the user joining the strategy
+     * @param tokenAddress depositing token address
+     * @param amount amount used to join the strategy
+     */
+    event Join(bytes32 indexed strategyId, address indexed depositor, address[] tokenAddress, uint256[] amount);
+
     constructor(address _strategyModule) ERC4626(IERC20(address(this))) ERC20("LIQUID", "LLP") {
         strategyModule = ILiquidStrategy(_strategyModule);
     }
@@ -78,8 +91,8 @@ contract Engine is ERC4626 {
         // update strategy stats
         strategyModule.updateStrategyStats(_strategyId, amounts, _fee);
 
-        // After the steps, send lptoken(s) to strategy module
-        // and update user and strategy stats
+        // Emits Join event
+        emit Join(_strategyId, msg.sender, _strategy.steps[0].assetsIn, amounts);
     }
 
     function verifyResult(uint256 _amountOut, address _assetOut, address _connector) internal view returns (bool) {
