@@ -8,6 +8,7 @@ on:
 
 env:
   FOUNDRY_PROFILE: ci
+
 jobs:
   check:
     name: Foundry project
@@ -35,10 +36,13 @@ jobs:
         run: |
           forge snapshot
         id: snapshot
+          
 
   deploy-mainnet-beta:
     needs: check
-    if: github.ref == 'refs/heads/curator'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/curator') ||
+      (github.event_name == 'pull_request' && github.base_ref == 'curator')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,9 +65,39 @@ jobs:
 
       - name: Deploy to Mainnet Beta
         run: |
-          echo -e "\n" | ./scripts/deploy.sh
+          echo -e "\n" | ./scripts/deploy.sh | tee deployment.log
         env:
           CI: true
+
+      - name: Extract Contract Addresses
+        if: success()
+        run: |
+          mkdir -p deployments/beta
+          grep "Contract deployed at:" deployment.log | while read -r line; do
+            CONTRACT_NAME=$(echo $line | cut -d' ' -f1)
+            ADDRESS=$(echo $line | cut -d' ' -f4)
+            echo "$ADDRESS" > "deployments/beta/${CONTRACT_NAME}.addr"
+          done
+
+      - name: Update Documentation
+        if: success()
+        run: |
+          mkdir -p docs/src
+          cat > docs/src/deployments-beta.md << EOF
+          # Beta Deployments
+          
+          Network: Base Mainnet (Beta)
+          
+          | Contract | Address | Verify |
+          |----------|---------|--------|
+          $(grep "Contract deployed at:" deployment.log | while read -r line; do
+            CONTRACT_NAME=$(echo $line | cut -d' ' -f1)
+            ADDRESS=$(echo $line | cut -d' ' -f4)
+            echo "| $CONTRACT_NAME | [\`$ADDRESS\`](https://basescan.org/address/$ADDRESS) | [Source](https://basescan.org/address/$ADDRESS#code) |"
+          done)
+          
+          Last updated: $(date -u)
+          EOF
 
   deploy-mainnet:
     needs: check
@@ -92,15 +126,46 @@ jobs:
 
       - name: Deploy to Mainnet
         run: |
-          echo -e "\n" | ./scripts/deploy.sh
+          echo -e "\n" | ./scripts/deploy.sh | tee deployment.log
         env:
           CI: true
+
+      - name: Extract Contract Addresses
+        if: success()
+        run: |
+          mkdir -p deployments/mainnet
+          grep "Contract deployed at:" deployment.log | while read -r line; do
+            CONTRACT_NAME=$(echo $line | cut -d' ' -f1)
+            ADDRESS=$(echo $line | cut -d' ' -f4)
+            echo "$ADDRESS" > "deployments/mainnet/${CONTRACT_NAME}.addr"
+          done
+
+      - name: Update Documentation
+        if: success()
+        run: |
+          mkdir -p docs/src
+          cat > docs/src/deployments-mainnet.md << EOF
+          # Mainnet Deployments
+          
+          Network: Base Mainnet
+          
+          | Contract | Address | Verify |
+          |----------|---------|--------|
+          $(grep "Contract deployed at:" deployment.log | while read -r line; do
+            CONTRACT_NAME=$(echo $line | cut -d' ' -f1)
+            ADDRESS=$(echo $line | cut -d' ' -f4)
+            echo "| $CONTRACT_NAME | [\`$ADDRESS\`](https://basescan.org/address/$ADDRESS) | [Source](https://basescan.org/address/$ADDRESS#code) |"
+          done)
+          
+          Last updated: $(date -u)
+          EOF
 
       - name: Save Deployment Artifacts
         if: success()
         run: |
           mkdir -p deployments
           cp broadcast/contracts.s.sol/*.json deployments/
+          cp docs/src/deployments-mainnet.md deployments/
 
       - name: Upload Deployment Artifacts
         uses: actions/upload-artifact@v3
@@ -112,12 +177,14 @@ jobs:
         if: success()
         uses: softprops/action-gh-release@v1
         with:
-          files: deployments/*.json
+          files: |
+            deployments/*.json
+            deployments/deployments-mainnet.md
           name: Release ${{ github.sha }}
           body: |
             Base Mainnet Deployment
             Commit: ${{ github.sha }}
             
-            Deployment artifacts are attached to this release.
+            See deployments-mainnet.md for contract addresses.
           draft: false
           prerelease: false
