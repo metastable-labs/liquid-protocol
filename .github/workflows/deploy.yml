@@ -61,11 +61,11 @@ jobs:
           echo "BASESCAN_API_KEY=${{ secrets.BASESCAN_API_KEY }}" >> .env
 
       - name: Make deploy script executable
-        run: chmod +x ./scripts/deploy.sh
+        run: chmod +x ./shell/deploy.sh
 
       - name: Deploy to Mainnet Beta
         run: |
-          echo -e "\n" | ./scripts/deploy.sh | tee deployment.log
+          echo -e "\n" | ./shell/deploy.sh | tee deployment.log
         env:
           CI: true
 
@@ -122,11 +122,11 @@ jobs:
           echo "BASESCAN_API_KEY=${{ secrets.BASESCAN_API_KEY }}" >> .env
 
       - name: Make deploy script executable
-        run: chmod +x ./scripts/deploy.sh
+        run: chmod +x ./shell/deploy.sh
 
       - name: Deploy to Mainnet
         run: |
-          echo -e "\n" | ./scripts/deploy.sh | tee deployment.log
+          echo -e "\n" | ./shell/deploy.sh | tee deployment.log
         env:
           CI: true
 
