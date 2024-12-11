@@ -29,7 +29,7 @@ contract JoinTest is Test {
     address constant aero_cbbtc_udsc_lpt = 0x827922686190790b37229fd06084350E74485b72;
 
     function setUp() public {
-        vm.createSelectFork(vm.envString("BASE_RPC_URL"));
+        vm.createSelectFork("https://base-rpc.publicnode.com");
         // strategy = Strategy(0x4368d53677c09995989a22DE5b31EfceAeD735ae);
         // engine = Engine(0xe7D11A96aB3813D8232a0711D4fa4f60E2f50B19);
         // oracle = Oracle(0x333Cd307bd0d8fDB3c38b14eacC4072FF548176B);

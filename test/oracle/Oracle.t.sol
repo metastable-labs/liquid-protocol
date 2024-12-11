@@ -9,7 +9,7 @@ contract OracleTest is Test, Constants {
     Oracle public oracle;
 
     function setUp() public {
-        vm.createSelectFork(vm.envString("BASE_RPC_URL"));
+        vm.createSelectFork("https://base-rpc.publicnode.com");
         oracle = new Oracle();
     }
 
