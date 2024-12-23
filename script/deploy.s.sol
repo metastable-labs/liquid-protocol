@@ -16,8 +16,9 @@ contract DeployScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
 
-        Strategy strategy = new Strategy();
-        Engine engine = new Engine(address(strategy));
+        Engine engine = new Engine();
+        Strategy strategy = new Strategy(address(engine));
+
         Oracle oracle = new Oracle();
 
         MoonwellConnector mwConnector = new MoonwellConnector(
