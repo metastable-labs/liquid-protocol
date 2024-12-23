@@ -3,11 +3,13 @@ pragma solidity ^0.8.13;
 
 import {Test, console, Vm} from "forge-std/Test.sol";
 import {Strategy} from "../../src/curators/strategy.sol";
+import {Engine} from "../../src/curators/engine.sol";
 import {AerodromeBasicConnector} from "../../src/protocols/dex/base/aerodrome-basic/main.sol";
 import "../../src/curators/interface/IStrategy.sol";
 
 contract StrategyTest is Test {
     Strategy public strategy;
+    Engine public engine;
     AerodromeBasicConnector public aerodromeBasicConnector;
 
     address constant cbBTC = 0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf;
@@ -18,7 +20,8 @@ contract StrategyTest is Test {
     address constant aero_cbbtc_udsc_lpt = 0x827922686190790b37229fd06084350E74485b72;
 
     function setUp() public {
-        strategy = new Strategy();
+        engine = new Engine();
+        strategy = new Strategy(address(engine));
         aerodromeBasicConnector = new AerodromeBasicConnector("Aero Connector", IConnector.ConnectorType.LENDING);
     }
 
@@ -72,7 +75,7 @@ contract StrategyTest is Test {
         vm.recordLogs();
 
         vm.prank(address(0xAAAA));
-        strategy.createStrategy(name, strategyDescription, steps, minDeposit, maxTVL, performanceFee);
+        strategy.createStrategy(name, strategyDescription, steps, minDeposit);
 
         Vm.Log[] memory entries = vm.getRecordedLogs();
 

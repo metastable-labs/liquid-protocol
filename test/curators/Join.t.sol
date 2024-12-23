@@ -37,13 +37,18 @@ contract JoinTest is Test {
         // oracle = Oracle(0x333Cd307bd0d8fDB3c38b14eacC4072FF548176B);
         // moonwellConnector = MoonwellConnector(0x01249b37d803573c071186BC4C3ea92872B93F5E);
 
-        strategy = new Strategy();
-        engine = new Engine(address(strategy));
+        vm.startPrank(address(0xB0b));
+        engine = new Engine();
+        strategy = new Strategy(address(engine));
         oracle = new Oracle();
         moonwellConnector = new MoonwellConnector(
-            "Tett", IConnector.ConnectorType.LENDING, address(strategy), address(engine), address(oracle)
+            "Moonwell Connector", IConnector.ConnectorType.LENDING, address(strategy), address(engine), address(oracle)
         );
         aerodromeBasicConnector = new AerodromeBasicConnector("Aero Connector", IConnector.ConnectorType.LENDING);
+
+        // toggle connectors
+        strategy.toggleConnector(address(moonwellConnector));
+        vm.stopPrank();
     }
 
     function test_Join_Strategy() public {
@@ -55,24 +60,26 @@ contract JoinTest is Test {
 
         vm.startPrank(curator);
         ERC20(cbBTC).approve(address(engine), a1);
-        engine.join(strategyId, amounts);
+        engine.join(strategyId, address(strategy), amounts);
+
+        ILiquidStrategy.UserStats memory ss = strategy.getUserStrategyStats(strategyId, curator);
+
+        assert(ERC20(USDC).balanceOf(address(moonwellConnector)) == 0);
+        assert(ss.isActive);
+
+        engine.exit(strategyId, address(strategy));
+
+        ss = strategy.getUserStrategyStats(strategyId, curator);
+
+        assert(!ss.isActive);
+
         vm.stopPrank();
-
-        ILiquidStrategy.ShareBalance memory bal =
-            strategy.getUserShareBalance(strategyId, curator, COMPTROLLER, moonwell_cbBTC);
-
-        ILiquidStrategy.AssetBalance memory bal1 = strategy.getUserAssetBalance(strategyId, curator, cbBTC);
-
-        assert(bal.protocol == COMPTROLLER);
-        assert(bal1.amount == a1);
     }
 
     function _createStrategy() internal returns (bytes32 strategyId) {
         string memory name = "cbBTC";
         string memory strategyDescription = "cbBTC strategy on base";
         uint256 minDeposit;
-        uint256 maxTVL;
-        uint256 performanceFee;
 
         ILiquidStrategy.Step[] memory steps = new ILiquidStrategy.Step[](2);
 
@@ -103,7 +110,7 @@ contract JoinTest is Test {
         });
 
         vm.prank(curator);
-        strategy.createStrategy(name, strategyDescription, steps, minDeposit, maxTVL, performanceFee);
+        strategy.createStrategy(name, strategyDescription, steps, minDeposit);
 
         strategyId = keccak256(abi.encodePacked(curator, name, strategyDescription));
     }
