@@ -18,6 +18,7 @@ contract DeployScript is Script {
 
         Engine engine = new Engine();
         Strategy strategy = new Strategy(address(engine));
+
         Oracle oracle = new Oracle();
 
         MoonwellConnector mwConnector = new MoonwellConnector(
