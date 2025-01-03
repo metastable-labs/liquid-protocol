@@ -119,6 +119,9 @@ jobs:
           echo "BASE_RPC_URL=${{ secrets.BASE_RPC_URL }}" >> .env
           echo "BASESCAN_API_KEY=${{ secrets.BASESCAN_API_KEY }}" >> .env
 
+      - name: Make base deploy script executable
+        run: chmod +x ./shell/deploy.base.sh
+
       - name: Make deploy script executable
         run: chmod +x ./shell/deploy.sh
 
