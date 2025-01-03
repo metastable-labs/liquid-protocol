@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GNU
 pragma solidity ^0.8.20;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
 import {IRouter} from "@aerodrome/contracts/contracts/interfaces/IRouter.sol";
 import {IPool} from "@aerodrome/contracts/contracts/interfaces/IPool.sol";
 import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/IPoolFactory.sol";
@@ -9,6 +10,9 @@ import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/
 import {BaseConnector} from "../../../../BaseConnector.sol";
 import {Constants} from "../../../common/constant.sol";
 import {AerodromeUtils} from "./utils.sol";
+import "../../../../curators/interface/IStrategy.sol";
+import "../../../../curators/interface/IEngine.sol";
+import "../../../../curators/interface/IOracle.sol";
 import "./interface.sol";
 import "./events.sol";
 
@@ -20,6 +24,15 @@ contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
 
     /// @notice Factory contract for creating and managing Aerodrome pools
     IPoolFactory public immutable aerodromeFactory;
+
+    /// @notice Oracle contract fetches the price of different tokens
+    ILiquidStrategy public immutable strategyModule;
+
+    /// @notice Engine contract
+    IEngine public immutable engine;
+
+    /// @notice Oracle contract fetches the price of different tokens
+    IOracle public immutable oracle;
 
     /* ========== ERRORS ========== */
 
@@ -50,9 +63,20 @@ contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
     /// @notice Initializes the AerodromeConnector
     /// @param name Name of the Connector
     /// @param connectorType Type of connector
-    constructor(string memory name, ConnectorType connectorType) BaseConnector(name, connectorType) {
+    constructor(string memory name, ConnectorType connectorType, address _strategy, address _engine, address _oracle)
+        BaseConnector(name, connectorType)
+    {
         aerodromeRouter = IRouter(AERODROME_ROUTER);
         aerodromeFactory = IPoolFactory(AERODROME_FACTORY);
+
+        strategyModule = ILiquidStrategy(_strategy);
+        engine = IEngine(_engine);
+        oracle = IOracle(_oracle);
+    }
+
+    modifier onlyEngine() {
+        require(msg.sender == address(engine), "caller is not the execution engine");
+        _;
     }
 
     receive() external payable {}
@@ -75,16 +99,15 @@ contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
         external
         payable
         override
+        onlyEngine
         returns (address, address[] memory, uint256[] memory, address, uint256, address[] memory, uint256[] memory)
     {
-        // TODO: also ensure that the original caller is execution engine
-        address executionEngine = msg.sender;
-
-        // if (actionType == ActionType.SUPPLY) {
-        //     (uint256 amountA, uint256 amountB, uint256 liquidity) = _depositBasicLiquidity(data, executionEngine);
-        //     // return abi.encode(amountA, amountB, liquidity);
-        //     return 1;
-        // } else if (actionType == ActionType.WITHDRAW) {
+        if (actionType == ActionType.SUPPLY) {
+            return _depositBasicLiquidity(assetsIn, amounts, amountRatio, data);
+            // return abi.encode(amountA, amountB, liquidity);
+            // return ();
+        }
+        // else if (actionType == ActionType.WITHDRAW) {
         //     (uint256 amountA, uint256 amountB) = _removeBasicLiquidity(data, executionEngine);
         //     // return abi.encode(amountA, amountB);
         //     return 1;
@@ -97,6 +120,20 @@ contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
         //     return 1;
         // }
         // revert InvalidAction();
+    }
+
+    /// @notice Initially updates the user token balance
+    function initialTokenBalanceUpdate(bytes32 strategyId, address userAddress, address token, uint256 amount)
+        external
+        onlyEngine
+    {
+        strategyModule.updateUserTokenBalance(strategyId, userAddress, token, amount, 0);
+    }
+
+    /// @notice Withdraw user asset
+    function withdrawAsset(address _user, address _token, uint256 _amount) external onlyEngine returns (bool) {
+        require(strategyModule.transferToken(_token, _amount), "");
+        return ERC20(_token).transfer(_user, _amount);
     }
 
     /// @notice Swaps exact tokens for tokens on the Aerodrome protocol
@@ -116,7 +153,7 @@ contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
 
         _receiveTokensFromCaller(tokenIn, amountIn, address(0), 0, caller);
 
-        IERC20(tokenIn).approve(address(aerodromeRouter), amountIn);
+        ERC20(tokenIn).approve(address(aerodromeRouter), amountIn);
 
         address tokenOut = routes[routes.length - 1].to;
 
@@ -140,34 +177,36 @@ contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
 
     /// @notice Deposits liquidity into an Aerodrome pool
     /// @dev Handles the process of adding liquidity, including price checks and token swaps
-    /// @param data The encoded parameters for the desired action
-    /// @param caller The original caller of this function
-    /// @return amountAUsed The amount of tokenA actually deposited
-    /// @return amountBUsed The amount of tokenB actually deposited
-    /// @return liquidityDeposited The amount of liquidity tokens received
-    function _depositBasicLiquidity(bytes calldata data, address caller)
+    /// @param assetsIn The encoded parameters for the desired action
+    /// @param amountsIn The original caller of this function
+    /// @param amountRatio The original caller of this function
+    /// @param data The original caller of this function
+    function _depositBasicLiquidity(
+        address[] memory assetsIn,
+        uint256[] memory amountsIn,
+        uint256 amountRatio,
+        bytes calldata data
+    )
         internal
-        returns (uint256 amountAUsed, uint256 amountBUsed, uint256 liquidityDeposited)
+        returns (address, address[] memory, uint256[] memory, address, uint256, address[] memory, uint256[] memory)
     {
-        (
-            address tokenA,
-            address tokenB,
-            bool stable,
-            uint256 amountAIn,
-            uint256 amountBIn,
-            uint256 amountAMin,
-            uint256 amountBMin,
-            bool balanceTokenRatio,
-            address to,
-            uint256 deadline
-        ) = abi.decode(data[4:], (address, address, bool, uint256, uint256, uint256, uint256, bool, address, uint256));
+        uint256 amountAUsed;
+        uint256 amountBUsed;
+        uint256 liquidityDeposited;
+
+        (bool stable, bool balanceTokenRatio, uint256 deadline) = abi.decode(data[4:], (bool, bool, uint256));
+
+        address tokenA = assetsIn[0];
+        address tokenB = assetsIn[1];
+        uint256 amountAIn = amountsIn[0];
+        uint256 amountBIn = amountsIn[1];
 
         if (block.timestamp > deadline) revert DeadlineExpired();
 
         address pool = aerodromeFactory.getPool(tokenA, tokenB, stable);
         if (pool == address(0)) revert PoolDoesNotExist();
 
-        _receiveTokensFromCaller(tokenA, amountAIn, tokenB, amountBIn, caller);
+        _receiveTokensFromCaller(tokenA, amountAIn, tokenB, amountBIn, msg.sender);
 
         uint256 ratioBefore = AerodromeUtils.reserveRatio(pool);
 
@@ -184,8 +223,8 @@ contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
                     AerodromeUtils.updateAmountsIn(amountALeft, amountBLeft, sellTokenA, amounts);
             }
             // Approve tokens to router
-            IERC20(tokenA).approve(address(aerodromeRouter), amountALeft);
-            IERC20(tokenB).approve(address(aerodromeRouter), amountBLeft);
+            ERC20(tokenA).approve(address(aerodromeRouter), amountALeft);
+            ERC20(tokenB).approve(address(aerodromeRouter), amountBLeft);
 
             (uint256 amountADeposited, uint256 amountBDeposited, uint256 liquidity) = aerodromeRouter.addLiquidity(
                 tokenA,
@@ -195,7 +234,7 @@ contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
                 amountBLeft,
                 0,
                 0,
-                to,
+                address(strategyModule),
                 deadline // 0 amountOutMin because we do checkValueOut()
             );
 
@@ -211,13 +250,13 @@ contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
         }
         AerodromeUtils.checkPriceImpact(pool, ratioBefore);
 
-        AerodromeUtils.checkValueOut(
-            liquidityDeposited, tokenA, tokenB, stable, amountAMin, amountBMin, amountAIn, amountBIn
-        );
+        AerodromeUtils.checkValueOut(liquidityDeposited, tokenA, tokenB, stable, 0, 0, amountAIn, amountBIn);
 
-        AerodromeUtils.returnLeftovers(tokenA, tokenB, amountALeft, amountBLeft, caller);
+        AerodromeUtils.returnLeftovers(tokenA, tokenB, amountALeft, amountBLeft, address(strategyModule));
 
         emit LiquidityAdded(tokenA, tokenB, amountAUsed, amountBUsed, liquidityDeposited);
+
+        // re
     }
 
     /// @notice Removes liquidity from an Aerodrome pool
@@ -246,8 +285,8 @@ contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
         address pool = aerodromeFactory.getPool(tokenA, tokenB, stable);
         if (pool == address(0)) revert PoolDoesNotExist();
 
-        IERC20(pool).transferFrom(caller, address(this), liquidity);
-        IERC20(pool).approve(address(aerodromeRouter), liquidity);
+        ERC20(pool).transferFrom(caller, address(this), liquidity);
+        ERC20(pool).approve(address(aerodromeRouter), liquidity);
 
         (amountA, amountB) =
             aerodromeRouter.removeLiquidity(tokenA, tokenB, stable, liquidity, amountAMin, amountBMin, to, deadline);
@@ -264,8 +303,8 @@ contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
 
         address lpToken = IGauge(gaugeAddress).stakingToken();
 
-        IERC20(lpToken).transferFrom(caller, address(this), amount);
-        IERC20(lpToken).approve(gaugeAddress, amount);
+        ERC20(lpToken).transferFrom(caller, address(this), amount);
+        ERC20(lpToken).approve(gaugeAddress, amount);
 
         IGauge(gaugeAddress).deposit(amount, caller);
 
@@ -283,7 +322,7 @@ contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
 
                 IWETH(WETH).deposit{value: msg.value}();
             } else {
-                IERC20(tokenA).transferFrom(caller, address(this), amountA);
+                ERC20(tokenA).transferFrom(caller, address(this), amountA);
             }
         }
         if (amountB > 0) {
@@ -292,7 +331,7 @@ contract AerodromeBasicConnector is BaseConnector, Constants, AerodromeEvents {
 
                 IWETH(WETH).deposit{value: msg.value}();
             } else {
-                IERC20(tokenB).transferFrom(caller, address(this), amountB);
+                ERC20(tokenB).transferFrom(caller, address(this), amountB);
             }
         }
     }

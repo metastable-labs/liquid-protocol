@@ -29,6 +29,9 @@ contract Strategy is Ownable2Step {
     // user => strategyIds
     mapping(address => bytes32[]) userStrategies;
 
+    // strategyId => user => tokenAddress => balance
+    mapping(bytes32 => mapping(address => mapping(address => uint256))) userTokenBalance;
+
     // connector => true/false
     mapping(address => bool) public approveConnector;
 
@@ -150,7 +153,8 @@ contract Strategy is Ownable2Step {
         address _shareToken,
         uint256 _shareAmount,
         address[] memory _underlyingTokens,
-        uint256[] memory _underlyingAmounts
+        uint256[] memory _underlyingAmounts,
+        uint256 stepIndex
     ) public onlyEngine {
         // Get user's stats
         ILiquidStrategy.UserStats storage _userStats = userStats[_strategyId][_userAddress];
@@ -168,13 +172,30 @@ contract Strategy is Ownable2Step {
 
         //
         if (_userStats.tokenBalances.length == 0) {
-            _userStats.isActive = true;
-            // _userStats.initialDeposit = _assetAmount;
             _userStats.joinTimestamp = block.timestamp;
         }
 
-        _userStats.tokenBalances.push(tempAssetBal);
-        _userStats.shareBalances.push(tempShareBal);
+        if (_userStats.tokenBalances.length == stepIndex) {
+            _userStats.tokenBalances.push(tempAssetBal);
+            _userStats.shareBalances.push(tempShareBal);
+        } else {
+            ILiquidStrategy.AssetBalance memory userTokenBalances = _userStats.tokenBalances[stepIndex];
+            ILiquidStrategy.ShareBalance memory userShareBalances = _userStats.shareBalances[stepIndex];
+
+            for (uint256 i; i < userTokenBalances.assets.length; i++) {
+                userTokenBalances.amounts[i] += _assetsAmount[i];
+            }
+
+            for (uint256 i; i < userShareBalances.underlyingTokens.length; i++) {
+                userShareBalances.underlyingAmounts[i] += _underlyingAmounts[i];
+            }
+
+            userShareBalances.shareAmount += _shareAmount;
+
+            _userStats.tokenBalances[stepIndex] = userTokenBalances;
+            _userStats.shareBalances[stepIndex] = userShareBalances;
+        }
+
         _userStats.lastActionTimestamp = block.timestamp;
     }
 
@@ -229,7 +250,31 @@ contract Strategy is Ownable2Step {
 
             // Get user's stats
             ILiquidStrategy.UserStats storage _userStats = userStats[_strategyId][_user];
-            _userStats.isActive = false;
+            // _userStats.isActive = false;
+        }
+    }
+
+    /**
+     * @dev Update user token balance
+     * @param _strategyId unique identifier of the strategy.
+     * @param _user address of the user whose balance is being updated.
+     * @param _token address of the token.
+     * @param _amount the amount of token to add or sub.
+     * @param _indicator determines the operation:
+     *                   0 to add,
+     *                   any other value to sub.
+     */
+    function updateUserTokenBalance(
+        bytes32 _strategyId,
+        address _user,
+        address _token,
+        uint256 _amount,
+        uint256 _indicator
+    ) public onlyConnector {
+        if (_indicator == 0) {
+            userTokenBalance[_strategyId][_user][_token] += _amount;
+        } else {
+            userTokenBalance[_strategyId][_user][_token] -= _amount;
         }
     }
 
@@ -360,6 +405,17 @@ contract Strategy is Ownable2Step {
             }
         }
         return ILiquidStrategy.ShareBalance(_protocol, _shareToken, 0, new address[](0), new uint256[](0));
+    }
+
+    /**
+     * @dev Get user's token balance in a strategy
+     * @param _strategyId ID of the strategy
+     * @param _user Address of the user
+     * @param _token Address of the token (e.g. USDC)
+     * @return TokenBalance containing the user's token balance
+     */
+    function getUserTokenBalance(bytes32 _strategyId, address _user, address _token) public view returns (uint256) {
+        return userTokenBalance[_strategyId][_user][_token];
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

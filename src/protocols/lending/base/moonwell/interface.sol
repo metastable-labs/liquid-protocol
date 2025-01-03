@@ -11,15 +11,11 @@ interface MErc20Interface {
     function borrow(uint256 borrowAmount) external returns (uint256);
     function repayBorrow(uint256 repayAmount) external returns (uint256);
     function repayBorrowBehalf(address borrower, uint256 repayAmount) external returns (uint256);
+    function exchangeRateCurrent() external returns (uint256);
     // function liquidateBorrow(address borrower, uint256 repayAmount, MTokenInterface mTokenCollateral)
     //     external
     //     returns (uint256);
     // function sweepToken(EIP20NonStandardInterface token) external;
-
-    /**
-     * Admin Functions **
-     */
-    function _addReserves(uint256 addAmount) external returns (uint256);
 }
 
 interface ComptrollerInterface {

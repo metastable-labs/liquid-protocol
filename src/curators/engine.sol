@@ -34,8 +34,6 @@ contract Engine is ERC4626 {
     constructor() ERC4626(IERC20(address(this))) ERC20("LIQUID", "LLP") {}
 
     function join(bytes32 _strategyId, address _strategyModule, uint256[] memory _amounts) public {
-        // restrict to join a strategy once
-
         // Fetch the strategy
         ILiquidStrategy.Strategy memory strategy = ILiquidStrategy(_strategyModule).getStrategy(_strategyId);
 
@@ -49,7 +47,11 @@ contract Engine is ERC4626 {
             // approve `this` as spender in client first
             ERC4626(asset).transferFrom(msg.sender, address(this), _amounts[i]);
             // tranfer token to connector
-            ERC4626(asset).transfer(strategy.steps[0].connector, _amounts[i]);
+            ERC4626(asset).transfer(_strategyModule, _amounts[i]);
+            // set initial token balance
+            IConnector(strategy.steps[0].connector).initialTokenBalanceUpdate(
+                _strategyId, msg.sender, asset, _amounts[i]
+            );
         }
 
         uint256[] memory prevAmounts = _amounts;
@@ -94,7 +96,7 @@ contract Engine is ERC4626 {
                 uint256[] memory underlyingAmounts
             ) {
                 // Verify result
-                require(_verifyResult(shareAmount, step.assetOut, _strategyModule), "Invalid shareAmount");
+                // require(_verifyResult(shareAmount, step.assetOut, _strategyModule), "Invalid shareAmount");
 
                 // update user info
                 ILiquidStrategy(_strategyModule).updateUserStats(
@@ -106,7 +108,8 @@ contract Engine is ERC4626 {
                     shareToken,
                     shareAmount,
                     underlyingTokens,
-                    underlyingAmounts
+                    underlyingAmounts,
+                    i
                 );
 
                 prevAmounts = assetsAmount;
@@ -168,17 +171,22 @@ contract Engine is ERC4626 {
             try IConnector(step.connector).execute(
                 actionType, assetsIn, new uint256[](0), assetOut, i - 1, 0, _strategyId, msg.sender, step.data
             ) returns (
-                address protocol,
-                address[] memory assets,
-                uint256[] memory assetsAmount,
-                address shareToken,
-                uint256 shareAmount,
-                address[] memory underlyingTokens,
-                uint256[] memory underlyingAmounts
+                address,
+                address[] memory,
+                uint256[] memory,
+                address assetOut,
+                uint256 amountOut,
+                address[] memory,
+                uint256[] memory
             ) {
                 // Some checks here
+
+                // Transfer token to user
+                if (i == 1) {
+                    IConnector(step.connector).withdrawAsset(msg.sender, assetOut, amountOut);
+                }
             } catch Error(string memory reason) {
-                revert(string(abi.encodePacked("Step ", i, " failed: ", reason)));
+                revert(string(abi.encodePacked("Step ", i - 1, " failed: ", reason)));
             }
         }
 

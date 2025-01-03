@@ -31,6 +31,9 @@ abstract contract Constants {
     // Moonwell Basic contracts
     address internal constant COMPTROLLER = 0xfBb21d0380beE3312B33c4353c8936a0F13EF26C;
 
+    // MetaMorpho contracts
+    address internal constant MORPHO_FACTORY = 0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101;
+
     // Aerodrome Basic contracts
     address internal constant AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
     address internal constant AERODROME_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;

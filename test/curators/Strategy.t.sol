@@ -4,12 +4,14 @@ pragma solidity ^0.8.13;
 import {Test, console, Vm} from "forge-std/Test.sol";
 import {Strategy} from "../../src/curators/strategy.sol";
 import {Engine} from "../../src/curators/engine.sol";
+import {Oracle} from "../../src/curators/oracle.sol";
 import {AerodromeBasicConnector} from "../../src/protocols/dex/base/aerodrome-basic/main.sol";
 import "../../src/curators/interface/IStrategy.sol";
 
 contract StrategyTest is Test {
     Strategy public strategy;
     Engine public engine;
+    Oracle public oracle;
     AerodromeBasicConnector public aerodromeBasicConnector;
 
     address constant cbBTC = 0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf;
@@ -22,7 +24,11 @@ contract StrategyTest is Test {
     function setUp() public {
         engine = new Engine();
         strategy = new Strategy(address(engine));
-        aerodromeBasicConnector = new AerodromeBasicConnector("Aero Connector", IConnector.ConnectorType.LENDING);
+        oracle = new Oracle();
+
+        aerodromeBasicConnector = new AerodromeBasicConnector(
+            "Aero Connector", IConnector.ConnectorType.LENDING, address(strategy), address(engine), address(oracle)
+        );
     }
 
     function test_Create_Strategy() public {
@@ -59,7 +65,7 @@ contract StrategyTest is Test {
         });
 
         // Step2 - Supply cbBTC + USDC on Aerodrome
-        address[] memory _assetsIn2 = new address[](2);
+        address[] memory _assetsIn2 = new address[](1);
         _assetsIn2[0] = cbBTC;
         _assetsIn2[1] = USDC;
         steps[2] = ILiquidStrategy.Step({
