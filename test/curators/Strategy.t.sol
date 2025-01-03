@@ -89,8 +89,4 @@ contract StrategyTest is Test {
         bytes32 strategyId = keccak256(abi.encodePacked(address(0xAAAA), name, strategyDescription));
         assertEq(entries[0].topics[1], strategyId);
     }
-
-    // function test_Get_Strategy() public {
-    //     ILiquidStrategy.Strategy[] memory sp = strategy.getStrategy(address(0xAAAA));
-    // }
 }
