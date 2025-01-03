@@ -10,6 +10,7 @@ import {Engine} from "../src/curators/engine.sol";
 
 // connectors
 import {MoonwellConnector} from "../src/protocols/lending/base/moonwell/main.sol";
+import {MorphConnector} from "../src/protocols/lending/base/morpho/main.sol";
 
 contract DeployScript is Script {
     function run() external {
@@ -23,6 +24,9 @@ contract DeployScript is Script {
 
         MoonwellConnector mwConnector = new MoonwellConnector(
             "Moonwell Connector", IConnector.ConnectorType.LENDING, address(strategy), address(engine), address(oracle)
+        );
+        MorphConnector morphoConnector = new MorphConnector(
+            "Morpho Connector", IConnector.ConnectorType.LENDING, address(strategy), address(engine), address(oracle)
         );
 
         vm.stopBroadcast();
