@@ -305,4 +305,10 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
 
         return (_tokenAPriceInUsd, _tokenBPriceInUsd);
     }
+
+    receive() external payable {
+        require(msg.sender == MW_WETH_UNWRAPPER, "not accepting eth");
+
+        IWETH9(ETH).deposit{value: msg.value}();
+    }
 }

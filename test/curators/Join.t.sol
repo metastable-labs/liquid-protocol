@@ -113,6 +113,54 @@ contract JoinTest is Test {
         vm.stopPrank();
     }
 
+    function test_Join_Strategy_WETH() public {
+        string memory name = "WETH";
+        string memory strategyDescription = "WETH strategy on base";
+        uint256 minDeposit;
+
+        ILiquidStrategy.Step[] memory steps = new ILiquidStrategy.Step[](1);
+
+        // Step 0 - Supply half your WETH on Moonwell
+        address[] memory _assetsIn0 = new address[](1);
+        _assetsIn0[0] = WETH;
+        steps[0] = ILiquidStrategy.Step({
+            connector: address(moonwellConnector),
+            actionType: IConnector.ActionType.SUPPLY,
+            assetsIn: _assetsIn0,
+            assetOut: moonwell_WETH,
+            amountRatio: 5000,
+            data: hex""
+        });
+
+        vm.prank(curator);
+        strategy.createStrategy(name, strategyDescription, steps, minDeposit);
+
+        bytes32 strategyId = keccak256(abi.encodePacked(curator, name, strategyDescription));
+
+        uint256 a1 = 1 * 10 ** (ERC20(WETH).decimals());
+
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = a1;
+
+        deal(WETH, address(0xb0b), a1);
+
+        vm.startPrank(address(0xb0b));
+        ERC20(WETH).approve(address(engine), a1);
+        engine.join(strategyId, address(strategy), amounts);
+
+        deal(WETH, address(0xb0b), a1);
+        ERC20(WETH).approve(address(engine), a1);
+        engine.join(strategyId, address(strategy), amounts);
+
+        deal(WETH, address(strategy), 1e6);
+
+        engine.exit(strategyId, address(strategy));
+
+        console.logUint(ERC20(WETH).balanceOf(address(0xb0b)));
+
+        vm.stopPrank();
+    }
+
     function test_Join_Strategy_cbBTC() public {
         bytes32 strategyId = _createStrategy();
         uint256 a1 = 1 * 10 ** (ERC20(cbBTC).decimals());
