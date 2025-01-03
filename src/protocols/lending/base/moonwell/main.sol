@@ -102,9 +102,6 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         require(assetInBalance > 0, "Not enough balance");
         uint256 amountToDeposit = (assetInBalance * amountRatio) / 10_000;
 
-        // deposit 99.999%
-        amountToDeposit -= amountToDeposit / 100_000;
-
         // transfer token from Strategy Module
         require(strategyModule.transferToken(assetIn, amountToDeposit), "Not enough token");
 
