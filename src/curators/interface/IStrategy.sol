@@ -45,7 +45,6 @@ interface ILiquidStrategy is IConnector {
         // Basic stats
         uint256 joinTimestamp; // When user joined
         uint256 lastActionTimestamp; // Last action timestamp
-        bool isActive;
         // Detailed balance tracking
         AssetBalance[] tokenBalances; // Individual token balances
         ShareBalance[] shareBalances; // Protocol-specific share balances (LP tokens etc)
@@ -76,7 +75,8 @@ interface ILiquidStrategy is IConnector {
         address _shareToken,
         uint256 _shareAmount,
         address[] memory _underlyingTokens,
-        uint256[] memory _underlyingAmounts
+        uint256[] memory _underlyingAmounts,
+        uint256 stepIndex
     ) external;
 
     function updateStrategyStats(
@@ -87,6 +87,24 @@ interface ILiquidStrategy is IConnector {
     ) external;
 
     function updateUserStrategy(bytes32 _strategyId, address _user, uint256 _indicator) external;
+
+    /**
+     * @dev Update user token balance
+     * @param _strategyId unique identifier of the strategy.
+     * @param _user address of the user whose balance is being updated.
+     * @param _token address of the token.
+     * @param _amount the amount of token to add or sub.
+     * @param _indicator determines the operation:
+     *                   0 to add,
+     *                   any other value to sub.
+     */
+    function updateUserTokenBalance(
+        bytes32 _strategyId,
+        address _user,
+        address _token,
+        uint256 _amount,
+        uint256 _indicator
+    ) external;
 
     /**
      * @dev Get strategy by strategy id
@@ -154,4 +172,13 @@ interface ILiquidStrategy is IConnector {
         address _shareToken,
         uint256 _stepIndex
     ) external view returns (ShareBalance memory);
+
+    /**
+     * @dev Get user's token balance in a strategy
+     * @param _strategyId ID of the strategy
+     * @param _user Address of the user
+     * @param _token Address of the token (e.g. USDC)
+     * @return TokenBalance the user's token balance
+     */
+    function getUserTokenBalance(bytes32 _strategyId, address _user, address _token) external returns (uint256);
 }

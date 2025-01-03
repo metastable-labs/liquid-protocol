@@ -47,4 +47,11 @@ interface IConnector {
             address[] memory underlyingTokens,
             uint256[] memory underlyingAmounts
         );
+
+    /// @notice Initially updates the user token balance
+    function initialTokenBalanceUpdate(bytes32 strategyId, address userAddress, address token, uint256 amount)
+        external;
+
+    /// @notice Withdraw user asset
+    function withdrawAsset(address _user, address _token, uint256 _amount) external returns (bool);
 }
