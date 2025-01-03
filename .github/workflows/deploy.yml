@@ -3,6 +3,8 @@ name: Smart Contract Deployment
 on:
   push:
     branches: [ "main", "curator" ]
+  pull_request:
+    branches: [ "main", "curator" ]
 
 env:
   FOUNDRY_PROFILE: ci
