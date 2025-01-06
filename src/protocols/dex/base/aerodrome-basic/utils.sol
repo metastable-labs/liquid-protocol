@@ -8,7 +8,7 @@ import {IPool} from "@aerodrome/contracts/contracts/interfaces/IPool.sol";
 import {IPoolFactory} from "@aerodrome/contracts/contracts/interfaces/factories/IPoolFactory.sol";
 
 import {IWETH} from "./interface.sol";
-import {Babylonian} from "../../../lib/Babylonian.sol";
+import {Babylonian} from "../../../../lib/Babylonian.sol";
 
 /// @title AerodromeUtils
 /// @notice A library for Aerodrome-specific utilities and calculations
@@ -108,8 +108,10 @@ library AerodromeUtils {
     function checkPriceImpact(address pool, uint256 ratioBefore) internal view returns (uint256) {
         uint256 ratioAfter = reserveRatio(pool);
 
-        uint256 diffBips = diff(ratioAfter, ratioBefore) * BIPS / ratioBefore;
-        if (diffBips > MAX_PRICE_IMPACT) revert AerodromeUtils_ExceededMaxPriceImpact(); // 1%
+        uint256 diffBips = (diff(ratioAfter, ratioBefore) * BIPS) / ratioBefore;
+        if (diffBips > MAX_PRICE_IMPACT) {
+            revert AerodromeUtils_ExceededMaxPriceImpact();
+        } // 1%
     }
 
     function checkValueOut(
@@ -150,7 +152,7 @@ library AerodromeUtils {
         // Note: These values are determined based on spot price, but the earlier slippage check is used to prevent price manipulation
         // This check is a last resort, to prevent loss of funds in low liquidity pools
         if (valueOut < valueIn) {
-            uint256 diffBips = (valueIn - valueOut) * BIPS / valueIn;
+            uint256 diffBips = ((valueIn - valueOut) * BIPS) / valueIn;
             if (diffBips > 200) revert AerodromeUtils_ExceededMaxValueLoss();
         }
     }
@@ -278,7 +280,7 @@ library AerodromeUtils {
         uint256 ay = (y * a) / WAD;
 
         if (stable) {
-            return (ay - bx) * WAD / (y + x) / aDec;
+            return ((ay - bx) * WAD) / (y + x) / aDec;
         } else if (swapFee == 30) {
             // Compute the square root term
             uint256 innerTerm = (xy + bx) * (3_988_009 * xy + 9 * bx + 3_988_000 * ay);

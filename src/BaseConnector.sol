@@ -10,59 +10,60 @@ import "./interface/IConnector.sol";
  */
 abstract contract BaseConnector is IConnector {
     /// @notice Name of the connector
-    bytes32 private immutable _name;
+    bytes32 public immutable connectorName;
 
-    /// @notice Version of the connector
-    uint256 private immutable _version;
+    /// @notice Type of the connector
+    ConnectorType public immutable connectorType;
 
-    /// @notice Address of the connector plugin
-    address public immutable _plugin;
-
-    error InvalidVersionNumber();
     /**
-     * @dev Constructor to set the name, version, and protocol address of the connector
-     * @param name_ Name of the connector
-     * @param version_ Version of the connector
+     * @dev Constructor to set the name and type of the connector
+     * @param _connectorName Name of the connector
      */
-
-    constructor(string memory name_, uint256 version_, address plugin_) {
-        if (version_ == 0) revert InvalidVersionNumber();
-
-        _name = keccak256(bytes(name_));
-        _version = version_;
-        _plugin = plugin_;
+    constructor(string memory _connectorName, ConnectorType _connectorType) {
+        connectorName = keccak256(bytes(_connectorName));
+        connectorType = _connectorType;
     }
 
     /**
      * @notice Gets the name of the connector
-     * @return string The name of the connector
+     * @return bytes32 The name of the connector
      */
-    function getName() external view override returns (string memory) {
-        return string(abi.encodePacked(_name));
+    function getConnectorName() external view override returns (bytes32) {
+        return connectorName;
     }
 
     /**
-     * @notice Gets the version of the connector
-     * @return uint256 The version of the connector
+     * @notice gets the type of the connector
+     * @return ConnectorType The type of connector
      */
-    function getVersion() external view override returns (uint256) {
-        return _version;
+    function getConnectorType() external view override returns (ConnectorType) {
+        return connectorType;
     }
 
     /**
-     * @notice Executes a function call on the connected protocol
-     * @dev This function must be implemented by derived contracts
-     * @param data The calldata for the function call
-     * @return bytes The return data from the function call
+     * @notice Executes a function call on the connected connector
      */
-    function execute(bytes calldata data) external payable virtual override returns (bytes memory);
-
-    /**
-     * @dev Internal function to get the function selector from calldata
-     * @param data The calldata to extract the selector from
-     * @return bytes4 The function selector
-     */
-    function _getSelector(bytes calldata data) internal pure returns (bytes4) {
-        return bytes4(data[:4]);
-    }
+    function execute(
+        ActionType actionType,
+        address[] memory assetsIn,
+        uint256[] memory amounts,
+        address assetOut,
+        uint256 stepIndex,
+        uint256 amountRatio,
+        bytes32 strategyId,
+        address userAddress,
+        bytes calldata data
+    )
+        external
+        payable
+        virtual
+        returns (
+            address protocol,
+            address[] memory assets,
+            uint256[] memory assetsAmount,
+            address shareToken,
+            uint256 shareAmount,
+            address[] memory underlyingTokens,
+            uint256[] memory underlyingAmounts
+        );
 }
