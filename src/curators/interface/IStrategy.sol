@@ -22,7 +22,8 @@ interface ILiquidStrategy is IConnector {
     }
 
     struct StrategyStats {
-        mapping(address => uint256) totalDeposits; // Total amount deposited (total tvl)
+        address[] depositTokens; // Array of tokens that have been deposited
+        uint256[] depositAmounts; // Array of corresponding deposit amounts
         uint256 totalUsers; // Total unique users
         uint256 totalFeeGenerated; // Total fees generated
         uint256 lastUpdated; // Last stats update timestamp
@@ -122,7 +123,7 @@ interface ILiquidStrategy is IConnector {
      * @dev Get data on a particular strategy
      * @param _strategyId ID of a strategy
      */
-    // function getStrategyStats(bytes32 _strategyId) external view returns (StrategyStats memory);
+    function getStrategyStats(bytes32 _strategyId) external view returns (StrategyStats memory);
 
     /**
      * @dev Get all strategies

@@ -214,8 +214,26 @@ contract Strategy is Ownable2Step {
     ) public onlyEngine {
         ILiquidStrategy.StrategyStats storage stats = strategyStats[_strategyId];
 
-        for (uint256 i; i < _amounts.length; i++) {
-            stats.totalDeposits[_assets[i]] += _amounts[i];
+        // Initialize arrays if they don't exist
+        if (stats.depositTokens.length == 0) {
+            stats.depositTokens = _assets;
+            stats.depositAmounts = _amounts;
+        } else {
+            // Update existing amounts or add new tokens
+            for (uint256 i = 0; i < _assets.length; i++) {
+                bool found = false;
+                for (uint256 j = 0; j < stats.depositTokens.length; j++) {
+                    if (stats.depositTokens[j] == _assets[i]) {
+                        stats.depositAmounts[j] += _amounts[i];
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    stats.depositTokens.push(_assets[i]);
+                    stats.depositAmounts.push(_amounts[i]);
+                }
+            }
         }
 
         stats.totalUsers++;
@@ -297,6 +315,14 @@ contract Strategy is Ownable2Step {
             revert StrategyNotFound(_strategyId);
         }
         return strategy;
+    }
+
+    /**
+     * @dev Get strategy stats strategy id
+     * @param _strategyId strategy identity
+     */
+    function getStrategyStats(bytes32 _strategyId) public view returns (ILiquidStrategy.StrategyStats memory) {
+        return strategyStats[_strategyId];
     }
 
     /**
