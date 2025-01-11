@@ -54,7 +54,6 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
     function execute(
         ActionType actionType,
         address[] memory assetsIn,
-        uint256[] memory amounts,
         address assetOut,
         uint256 stepIndex,
         uint256 amountRatio,
@@ -89,9 +88,11 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
     }
 
     /// @notice Withdraw user asset
-    function withdrawAsset(address _user, address _token, uint256 _amount) external onlyEngine returns (bool) {
-        require(strategyModule.transferToken(_token, _amount), "");
-        return ERC20(_token).transfer(_user, _amount);
+    function withdrawAsset(bytes32 _strategyId, address _user, address _token) external onlyEngine returns (bool) {
+        uint256 tokenBalance = strategyModule.getUserTokenBalance(_strategyId, _user, _token);
+
+        require(strategyModule.transferToken(_token, tokenBalance), "Not enough tokens for withdrawal");
+        return ERC20(_token).transfer(_user, tokenBalance);
     }
 
     function _mintToken(address assetIn, address assetOut, bytes32 strategyId, address userAddress, uint256 amountRatio)
@@ -105,15 +106,23 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         // transfer token from Strategy Module
         require(strategyModule.transferToken(assetIn, amountToDeposit), "Not enough token");
 
+        // update user token balance
+        strategyModule.updateUserTokenBalance(strategyId, userAddress, assetIn, amountToDeposit, 1);
+
         uint256 shareAmountBefore = ERC20(assetOut).balanceOf(address(this));
+
+        // verify asset out before approving
+        require(_verifyAssetOut(assetOut), "incorrect spender");
 
         // approve and supply asset
         ERC20(assetIn).approve(assetOut, amountToDeposit);
         // 0=success
-        uint256 success = MErc20Interface(assetOut).mint(amountToDeposit);
-        if (success != 0) revert();
+        require(MErc20Interface(assetOut).mint(amountToDeposit) == 0, "mint failed");
 
         uint256 shareAmount = ERC20(assetOut).balanceOf(address(this)) - shareAmountBefore;
+
+        uint256[] memory assetsInAmount = new uint256[](1);
+        assetsInAmount[0] = assetInBalance;
 
         address[] memory underlyingTokens = new address[](1);
         underlyingTokens[0] = assetIn;
@@ -123,11 +132,9 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
 
         // update user token balance
         strategyModule.updateUserTokenBalance(strategyId, userAddress, assetOut, shareAmount, 0);
-        strategyModule.updateUserTokenBalance(strategyId, userAddress, assetIn, amountToDeposit, 1);
 
-        return (
-            COMPTROLLER, underlyingTokens, underlyingAmounts, assetOut, shareAmount, underlyingTokens, underlyingAmounts
-        );
+        return
+            (COMPTROLLER, underlyingTokens, assetsInAmount, assetOut, shareAmount, underlyingTokens, underlyingAmounts);
     }
 
     function _borrowToken(
@@ -141,8 +148,6 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         internal
         returns (address, address[] memory, uint256[] memory, address, uint256, address[] memory, uint256[] memory)
     {
-        // find a function to get supplied amount using the ct
-
         // expects 3 assetsIn: e.g [token(cbBtc), collateralToken(mw_cbBtc), borrowMwContract(mw_usdc)]
         uint256 assetIn1Balance = strategyModule.getUserTokenBalance(strategyId, userAddress, assetsIn[1]);
         uint256 assetIn0Balance = (assetIn1Balance * MErc20Interface(assetsIn[1]).exchangeRateCurrent()) / 1e18;
@@ -154,13 +159,14 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         mTokens[0] = assetsIn[1];
         ComptrollerInterface(COMPTROLLER).enterMarkets(mTokens);
 
-        // borrow
+        // calculate ammount to borrow
         uint256 currentTokenAToBPrice =
             _getOneTokenAPriceInTokenB(assetsIn[0], assetOut) / 10 ** (18 - ERC20(assetOut).decimals());
         uint256 suppliedAmount = (assetIn0Balance * currentTokenAToBPrice) / 10 ** ERC20(assetsIn[0]).decimals();
         uint256 amountToBorrow = (suppliedAmount * amountRatio) / 10_000;
-        uint256 success = MErc20Interface(assetsIn[2]).borrow(amountToBorrow);
-        if (success != 0) revert();
+
+        // borrow
+        require(MErc20Interface(assetsIn[2]).borrow(amountToBorrow) == 0, "borrow failed");
 
         address[] memory assets = new address[](1);
         assets[0] = assetsIn[1];
@@ -205,22 +211,23 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         // get collateral token balance
         uint256 ctBalance = strategyModule.getUserTokenBalance(strategyId, userAddress, assetsIn[0]);
 
-        require(btBalance <= currentTokenBalance, "borrow amount less than user balance");
+        require(btBalance - 1 <= currentTokenBalance, "borrow amount less than user balance");
+
+        // update user token balance before transfer
+        strategyModule.updateUserTokenBalance(strategyId, userAddress, assetsIn[0], btBalance - 1, 1);
 
         // transfer token from Strategy Module
-        require(strategyModule.transferToken(assetsIn[0], btBalance), "Not enough borrowed token");
+        require(strategyModule.transferToken(assetsIn[0], btBalance), "not enough borrowed token");
+
+        // verify spender
+        require(_verifyAssetOut(assetsIn[2]), "incorrect spender");
 
         // repay
         ERC20(assetsIn[0]).approve(assetsIn[2], btBalance);
-        uint256 status = MErc20Interface(assetsIn[2]).repayBorrow(btBalance);
-        if (status != 0) revert();
+        require(MErc20Interface(assetsIn[2]).repayBorrow(btBalance) == 0, "repay borrow failed");
 
         // exit market
-        status = ComptrollerInterface(COMPTROLLER).exitMarket(assetsIn[1]);
-        if (status != 0) revert();
-
-        // update user token balance
-        strategyModule.updateUserTokenBalance(strategyId, userAddress, assetsIn[0], btBalance, 1);
+        require(ComptrollerInterface(COMPTROLLER).exitMarket(assetsIn[1]) == 0, "exit market failed");
 
         return (COMPTROLLER, new address[](0), new uint256[](0), address(0), 0, new address[](0), new uint256[](0));
     }
@@ -250,8 +257,10 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
 
         // redeem
         ERC20(assetsIn[0]).approve(assetsIn[0], stBalance);
-        uint256 status = MErc20Interface(assetsIn[0]).redeem(stBalance);
-        if (status != 0) revert();
+        require(MErc20Interface(assetsIn[0]).redeem(stBalance) == 0, "redeem failed");
+
+        // update user token balance
+        strategyModule.updateUserTokenBalance(strategyId, userAddress, assetsIn[0], stBalance, 1);
 
         uint256 tokenBalanceDiff = ERC20(assetOut).balanceOf(address(this)) - tokenBalanceBefore;
 
@@ -263,7 +272,6 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
 
         // update user token balance
         strategyModule.updateUserTokenBalance(strategyId, userAddress, assetOut, tokenBalanceDiff, 0);
-        strategyModule.updateUserTokenBalance(strategyId, userAddress, assetsIn[0], stBalance, 1);
 
         return (
             COMPTROLLER,
@@ -304,6 +312,13 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         if (_tokenB == USDC) _tokenBPriceInUsd = oracle.getLatestAnswer(SEQUENCER_UPTIME_FEED, USDC_USD);
 
         return (_tokenAPriceInUsd, _tokenBPriceInUsd);
+    }
+
+    function _verifyAssetOut(address _assetOut) internal returns (bool) {
+        return (
+            (_assetOut == MOONWELL_USDC) || (_assetOut == MOONWELL_CBBTC) || (_assetOut == MOONWELL_WETH)
+                || (_assetOut == MOONWELL_DAI) || (_assetOut == MOONWELL_EURC)
+        );
     }
 
     receive() external payable {

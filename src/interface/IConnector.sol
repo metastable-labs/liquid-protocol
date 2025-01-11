@@ -28,7 +28,6 @@ interface IConnector {
     function execute(
         ActionType actionType,
         address[] memory assetsIn,
-        uint256[] memory amounts,
         address assetOut,
         uint256 stepIndex,
         uint256 amountRatio,
@@ -53,5 +52,5 @@ interface IConnector {
         external;
 
     /// @notice Withdraw user asset
-    function withdrawAsset(address _user, address _token, uint256 _amount) external returns (bool);
+    function withdrawAsset(bytes32 _strategyId, address _user, address _token) external returns (bool);
 }
