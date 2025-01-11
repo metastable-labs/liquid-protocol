@@ -33,7 +33,14 @@ The protocol consists of several key components:
 ### Sequence Diagram / Execution Flow
 [![](https://mermaid.ink/img/pako:eNptUt1rwjAQ_1fCPeypulpb3PLgi3OwwWBM3MPoS0jPWmiTLk1AJ_7vu7ZWqzWQ5D5-97sP7gBSJwgcKvx1qCS-ZCI1oogVo1MKYzOZlUJZtq7QDK0ra4TFdD_0LFWaKRzaF1oplFbfIfs02mqp89bTvnXa0Xze5eFsYZCkx3edqZvsnXYF_xZ5lpDMHsivDdIrbHXF3VbK2XKH0lm8Yc21LtmrNgyF3LLKYtna69NGEsW5qT5LH3kGELhrk7M3ZdEIaS-4zje6Jv1C64yir3K5vcfaa2NdNv3WfbrqTq2X2fSQJyCqpBVOaILXQxoUAB4UaAqRJbQ6hzokBrvFAmPgJCa4ETUOYnUkqHBWr_ZKArfGoQdGu3QLfCPyijTXVHHau7OVFuJH66ILIRX4AXbAJ-E4nM3C52Aa0PXDKPBgT-ZpNJ76QRhOnkJ_EgXR7OjBX8PgjyMPMMloTh_tsjc7f_wHVLD53g?type=png)](https://mermaid.live/edit#pako:eNptUt1rwjAQ_1fCPeypulpb3PLgi3OwwWBM3MPoS0jPWmiTLk1AJ_7vu7ZWqzWQ5D5-97sP7gBSJwgcKvx1qCS-ZCI1oogVo1MKYzOZlUJZtq7QDK0ra4TFdD_0LFWaKRzaF1oplFbfIfs02mqp89bTvnXa0Xze5eFsYZCkx3edqZvsnXYF_xZ5lpDMHsivDdIrbHXF3VbK2XKH0lm8Yc21LtmrNgyF3LLKYtna69NGEsW5qT5LH3kGELhrk7M3ZdEIaS-4zje6Jv1C64yir3K5vcfaa2NdNv3WfbrqTq2X2fSQJyCqpBVOaILXQxoUAB4UaAqRJbQ6hzokBrvFAmPgJCa4ETUOYnUkqHBWr_ZKArfGoQdGu3QLfCPyijTXVHHau7OVFuJH66ILIRX4AXbAJ-E4nM3C52Aa0PXDKPBgT-ZpNJ76QRhOnkJ_EgXR7OjBX8PgjyMPMMloTh_tsjc7f_wHVLD53g)
 
-###
+> ⚠️ **Warning**: This version of Liquid protocol hasn't been audited, so use it with caution for test purposes only.
+
+## Roadmap (not in order):
+
+ - [x] Single step strategies
+ - [ ] Multi-step strategy curation
+ - [ ] Yield and rewards calculation
+ - [ ] Onchain risk analysis
 
 ## Get started
 
