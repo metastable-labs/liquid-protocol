@@ -59,10 +59,6 @@ contract Engine is ERC4626 {
             // Fetch step
             ILiquidStrategy.Step memory step = strategy.steps[i];
 
-            // Default ratio to 100% for first step
-            // uint256 amountRatio = i == 0 ? 10_000 : step.amountRatio;
-            uint256 amountRatio = step.amountRatio;
-
             // Constrain the first step to certain actions
             if (
                 i == 0
@@ -80,7 +76,7 @@ contract Engine is ERC4626 {
                 step.assetsIn,
                 step.assetOut,
                 type(uint256).max,
-                amountRatio,
+                step.amountRatio,
                 _strategyId,
                 msg.sender,
                 step.data
