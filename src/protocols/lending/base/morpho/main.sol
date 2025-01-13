@@ -54,7 +54,6 @@ contract MorphConnector is BaseConnector, Constants, MorphEvents {
     function execute(
         ActionType actionType,
         address[] memory assetsIn,
-        uint256[] memory amounts,
         address assetOut,
         uint256 stepIndex,
         uint256 amountRatio,
@@ -85,9 +84,11 @@ contract MorphConnector is BaseConnector, Constants, MorphEvents {
     }
 
     /// @notice Withdraw user asset
-    function withdrawAsset(address _user, address _token, uint256 _amount) external onlyEngine returns (bool) {
-        require(strategyModule.transferToken(_token, _amount), "");
-        return ERC20(_token).transfer(_user, _amount);
+    function withdrawAsset(bytes32 _strategyId, address _user, address _token) external onlyEngine returns (bool) {
+        uint256 tokenBalance = strategyModule.getUserTokenBalance(_strategyId, _user, _token);
+
+        require(strategyModule.transferToken(_token, tokenBalance), "Not enough tokens for withdrawal");
+        return ERC20(_token).transfer(_user, tokenBalance);
     }
 
     function _deposit(address assetIn, address assetOut, uint256 amountRatio, bytes32 strategyId, address userAddress)
@@ -107,6 +108,9 @@ contract MorphConnector is BaseConnector, Constants, MorphEvents {
         uint256 shareAmount = MorphInterface(assetOut).deposit(amountToDeposit, address(this));
         if (shareAmount == 0) revert();
 
+        uint256[] memory assetsInAmount = new uint256[](1);
+        assetsInAmount[0] = assetInBalance;
+
         address[] memory underlyingTokens = new address[](1);
         underlyingTokens[0] = assetIn;
 
@@ -118,16 +122,10 @@ contract MorphConnector is BaseConnector, Constants, MorphEvents {
 
         // update user token balance
         strategyModule.updateUserTokenBalance(strategyId, userAddress, assetOut, shareAmount, 0);
-        strategyModule.updateUserTokenBalance(strategyId, userAddress, assetIn, amountToDeposit - 1, 1);
+        strategyModule.updateUserTokenBalance(strategyId, userAddress, assetIn, amountToDeposit, 1);
 
         return (
-            MORPHO_FACTORY,
-            underlyingTokens,
-            underlyingAmounts,
-            assetOut,
-            shareAmount,
-            underlyingTokens,
-            underlyingAmounts
+            MORPHO_FACTORY, underlyingTokens, assetsInAmount, assetOut, shareAmount, underlyingTokens, underlyingAmounts
         );
     }
 

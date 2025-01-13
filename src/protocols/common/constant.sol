@@ -31,6 +31,11 @@ abstract contract Constants {
     // Moonwell Basic contracts
     address internal constant COMPTROLLER = 0xfBb21d0380beE3312B33c4353c8936a0F13EF26C;
     address internal constant MW_WETH_UNWRAPPER = 0x1382cFf3CeE10D283DccA55A30496187759e4cAf;
+    address internal constant MOONWELL_USDC = 0xEdc817A28E8B93B03976FBd4a3dDBc9f7D176c22;
+    address internal constant MOONWELL_CBBTC = 0xF877ACaFA28c19b96727966690b2f44d35aD5976;
+    address internal constant MOONWELL_WETH = 0x628ff693426583D9a7FB391E54366292F509D457;
+    address internal constant MOONWELL_DAI = 0x73b06D8d18De422E269645eaCe15400DE7462417;
+    address internal constant MOONWELL_EURC = 0xb682c840B5F4FC58B20769E691A6fa1305A501a2;
 
     // MetaMorpho contracts
     address internal constant MORPHO_FACTORY = 0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101;
