@@ -46,7 +46,6 @@ abstract contract BaseConnector is IConnector {
     function execute(
         ActionType actionType,
         address[] memory assetsIn,
-        uint256[] memory amounts,
         address assetOut,
         uint256 stepIndex,
         uint256 amountRatio,

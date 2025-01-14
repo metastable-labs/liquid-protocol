@@ -54,15 +54,10 @@ contract Engine is ERC4626 {
             );
         }
 
-        uint256[] memory prevAmounts = _amounts;
-
         // Execute all steps atomically
         for (uint256 i; i < strategy.steps.length; i++) {
             // Fetch step
             ILiquidStrategy.Step memory step = strategy.steps[i];
-
-            // Default ratio to 100% for first step
-            uint256 amountRatio = i == 0 ? 10_000 : step.amountRatio;
 
             // Constrain the first step to certain actions
             if (
@@ -79,10 +74,9 @@ contract Engine is ERC4626 {
             try IConnector(step.connector).execute(
                 step.actionType,
                 step.assetsIn,
-                prevAmounts,
                 step.assetOut,
                 type(uint256).max,
-                amountRatio,
+                step.amountRatio,
                 _strategyId,
                 msg.sender,
                 step.data
@@ -111,8 +105,6 @@ contract Engine is ERC4626 {
                     underlyingAmounts,
                     i
                 );
-
-                prevAmounts = assetsAmount;
             } catch Error(string memory reason) {
                 revert(string(abi.encodePacked("Step ", i, " failed: ", reason)));
             }
@@ -122,10 +114,15 @@ contract Engine is ERC4626 {
         uint256 _fee = 0;
 
         // update strategy stats
-        ILiquidStrategy(_strategyModule).updateStrategyStats(_strategyId, strategy.steps[0].assetsIn, _amounts, _fee);
+        ILiquidStrategy(_strategyModule).updateStrategyStats(
+            _strategyId, strategy.steps[0].assetsIn, _amounts, msg.sender, _fee, 0
+        );
 
         // update user's strategy array
         ILiquidStrategy(_strategyModule).updateUserStrategy(_strategyId, msg.sender, 0);
+
+        // update the user's joined status
+        ILiquidStrategy(_strategyModule).setJoinedStrategy(_strategyId, msg.sender, true);
 
         // Emits Join event
         emit Join(_strategyId, msg.sender, strategy.steps[0].assetsIn, _amounts);
@@ -169,7 +166,7 @@ contract Engine is ERC4626 {
 
             // Execute connector action
             try IConnector(step.connector).execute(
-                actionType, assetsIn, new uint256[](0), assetOut, i - 1, 0, _strategyId, msg.sender, step.data
+                actionType, assetsIn, assetOut, i - 1, 0, _strategyId, msg.sender, step.data
             ) returns (
                 address,
                 address[] memory,
@@ -183,15 +180,32 @@ contract Engine is ERC4626 {
 
                 // Transfer token to user
                 if (i == 1) {
-                    IConnector(step.connector).withdrawAsset(msg.sender, assetOut, amountOut);
+                    // todo: get all the assetout then send
+                    for (uint256 j; j < step.assetsIn.length; j++) {
+                        IConnector(step.connector).withdrawAsset(_strategyId, msg.sender, step.assetsIn[j]);
+                    }
                 }
             } catch Error(string memory reason) {
                 revert(string(abi.encodePacked("Step ", i - 1, " failed: ", reason)));
             }
         }
 
+        ILiquidStrategy.AssetBalance memory userAssetBalance =
+            ILiquidStrategy(_strategyModule).getUserAssetBalance(_strategyId, msg.sender, steps[0].assetsIn, 0);
+
+        // zero free for now
+        uint256 _fee = 0;
+
+        // update strategy stats
+        ILiquidStrategy(_strategyModule).updateStrategyStats(
+            _strategyId, steps[0].assetsIn, userAssetBalance.amounts, msg.sender, _fee, 1
+        );
+
         // update user strategy stats
         ILiquidStrategy(_strategyModule).updateUserStrategy(_strategyId, msg.sender, 1);
+
+        // update the user's joined status
+        ILiquidStrategy(_strategyModule).setJoinedStrategy(_strategyId, msg.sender, false);
 
         // Emits Exit event
         emit Exit(_strategyId, msg.sender);

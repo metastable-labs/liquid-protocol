@@ -66,6 +66,13 @@ interface ILiquidStrategy is IConnector {
 
     function transferToken(address _token, uint256 _amount) external returns (bool);
 
+    /**
+     * @dev set value to true if a user joins a strategy, else, false
+     * @param _strategyId  strategy identity
+     * @param _user The address of the user
+     */
+    function setJoinedStrategy(bytes32 _strategyId, address _user, bool _status) external;
+
     function updateUserStats(
         bytes32 _strategyId,
         address _userAddress,
@@ -83,7 +90,9 @@ interface ILiquidStrategy is IConnector {
         bytes32 strategyId,
         address[] memory assetIn,
         uint256[] memory amounts,
-        uint256 performanceFee
+        address user,
+        uint256 performanceFee,
+        uint256 indicator
     ) external;
 
     function updateUserStrategy(bytes32 _strategyId, address _user, uint256 _indicator) external;

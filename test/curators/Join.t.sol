@@ -40,11 +40,6 @@ contract JoinTest is Test {
 
         vm.rollFork(24_474_060);
 
-        // strategy = Strategy(0x4368d53677c09995989a22DE5b31EfceAeD735ae);
-        // engine = Engine(0xe7D11A96aB3813D8232a0711D4fa4f60E2f50B19);
-        // oracle = Oracle(0x333Cd307bd0d8fDB3c38b14eacC4072FF548176B);
-        // moonwellConnector = MoonwellConnector(0x01249b37d803573c071186BC4C3ea92872B93F5E);
-
         vm.startPrank(address(0xB0b));
         engine = new Engine();
         strategy = new Strategy(address(engine));
@@ -62,10 +57,77 @@ contract JoinTest is Test {
         // toggle connectors
         strategy.toggleConnector(address(moonwellConnector));
         strategy.toggleConnector(address(morphConnector));
+        strategy.toggleConnector(address(aerodromeBasicConnector));
         vm.stopPrank();
     }
 
-    function test_Join_Strategy_USDC() public {
+    function test_USDC_WETH_AERODROME_SINGLE() public {
+        bytes32 strategyId;
+        {
+            string memory name = "USDC / WETH";
+            string memory strategyDescription = "USDC and WETH strategy on base";
+            uint256 minDeposit;
+
+            ILiquidStrategy.Step[] memory steps = new ILiquidStrategy.Step[](1);
+
+            // Step 0 - Supply half your USDC on Moonwell
+            address[] memory _assetsIn0 = new address[](2);
+            _assetsIn0[0] = USDC;
+            _assetsIn0[1] = WETH;
+            steps[0] = ILiquidStrategy.Step({
+                connector: address(aerodromeBasicConnector),
+                actionType: IConnector.ActionType.SUPPLY,
+                assetsIn: _assetsIn0,
+                assetOut: 0xcDAC0d6c6C59727a65F871236188350531885C43,
+                amountRatio: 5000,
+                data: abi.encode(0, 1)
+            });
+
+            vm.prank(curator);
+            strategy.createStrategy(name, strategyDescription, steps, minDeposit);
+
+            strategyId = keccak256(abi.encodePacked(curator, name, strategyDescription));
+        }
+
+        uint256 a1 = 1000 * 10 ** (ERC20(USDC).decimals());
+        uint256 a2 = 1 * 10 ** (ERC20(WETH).decimals());
+
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = a1;
+        amounts[1] = a2;
+
+        address[] memory assets = new address[](2);
+        assets[0] = USDC;
+        assets[1] = WETH;
+
+        deal(USDC, address(0xb0b), a1);
+        deal(WETH, address(0xb0b), a2);
+
+        vm.startPrank(address(0xb0b));
+        ERC20(USDC).approve(address(engine), a1);
+        ERC20(WETH).approve(address(engine), a2);
+        engine.join(strategyId, address(strategy), amounts);
+
+        {
+            (uint256[] memory totalDeposits, uint256 totalUsers, uint256 totalFeeGenerated, uint256 lastUpdated) =
+                strategy.getStrategyStats(strategyId, assets);
+
+            console.logUint(totalDeposits[0]);
+            console.logUint(totalDeposits[1]);
+            console.logUint(totalUsers);
+            console.logUint(totalFeeGenerated);
+            console.logUint(lastUpdated);
+        }
+
+        engine.exit(strategyId, address(strategy));
+
+        console.logUint(ERC20(USDC).balanceOf(address(0xb0b)));
+        console.logUint(ERC20(WETH).balanceOf(address(0xb0b)));
+
+        vm.stopPrank();
+    }
+
+    function test_USDC_MOONWELL_SINGLE() public {
         string memory name = "USDC";
         string memory strategyDescription = "USDC strategy on base";
         uint256 minDeposit;
@@ -100,12 +162,6 @@ contract JoinTest is Test {
         ERC20(USDC).approve(address(engine), a1);
         engine.join(strategyId, address(strategy), amounts);
 
-        deal(USDC, address(0xb0b), a1);
-        ERC20(USDC).approve(address(engine), a1);
-        engine.join(strategyId, address(strategy), amounts);
-
-        deal(USDC, address(strategy), 1e6);
-
         engine.exit(strategyId, address(strategy));
 
         console.logUint(ERC20(USDC).balanceOf(address(0xb0b)));
@@ -113,7 +169,7 @@ contract JoinTest is Test {
         vm.stopPrank();
     }
 
-    function test_Join_Strategy_WETH() public {
+    function test_WETH_MORPHO_SINGLE() public {
         string memory name = "WETH";
         string memory strategyDescription = "WETH strategy on base";
         uint256 minDeposit;
@@ -124,10 +180,10 @@ contract JoinTest is Test {
         address[] memory _assetsIn0 = new address[](1);
         _assetsIn0[0] = WETH;
         steps[0] = ILiquidStrategy.Step({
-            connector: address(moonwellConnector),
+            connector: address(morphConnector),
             actionType: IConnector.ActionType.SUPPLY,
             assetsIn: _assetsIn0,
-            assetOut: moonwell_WETH,
+            assetOut: 0x6b13c060F13Af1fdB319F52315BbbF3fb1D88844,
             amountRatio: 5000,
             data: hex""
         });
@@ -148,15 +204,51 @@ contract JoinTest is Test {
         ERC20(WETH).approve(address(engine), a1);
         engine.join(strategyId, address(strategy), amounts);
 
-        deal(WETH, address(0xb0b), a1);
-        ERC20(WETH).approve(address(engine), a1);
-        engine.join(strategyId, address(strategy), amounts);
-
-        deal(WETH, address(strategy), 1e6);
-
         engine.exit(strategyId, address(strategy));
 
         console.logUint(ERC20(WETH).balanceOf(address(0xb0b)));
+
+        vm.stopPrank();
+    }
+
+    function test_USDC_MORPHO_SINGLE() public {
+        string memory name = "USDC_MORPHO";
+        string memory strategyDescription = "USDC strategy on base";
+        uint256 minDeposit;
+
+        ILiquidStrategy.Step[] memory steps = new ILiquidStrategy.Step[](1);
+
+        // Step 0 - Supply half your USDC on Moonwell
+        address[] memory _assetsIn0 = new address[](1);
+        _assetsIn0[0] = USDC;
+        steps[0] = ILiquidStrategy.Step({
+            connector: address(morphConnector),
+            actionType: IConnector.ActionType.SUPPLY,
+            assetsIn: _assetsIn0,
+            assetOut: 0xc0c5689e6f4D256E861F65465b691aeEcC0dEb12,
+            amountRatio: 5000,
+            data: hex""
+        });
+
+        vm.prank(curator);
+        strategy.createStrategy(name, strategyDescription, steps, minDeposit);
+
+        bytes32 strategyId = keccak256(abi.encodePacked(curator, name, strategyDescription));
+
+        uint256 a1 = 1 * 10 ** (ERC20(USDC).decimals());
+
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = a1;
+
+        deal(USDC, address(0xb0b), a1);
+
+        vm.startPrank(address(0xb0b));
+        ERC20(USDC).approve(address(engine), a1);
+        engine.join(strategyId, address(strategy), amounts);
+
+        engine.exit(strategyId, address(strategy));
+
+        console.logUint(ERC20(USDC).balanceOf(address(0xb0b)));
 
         vm.stopPrank();
     }
@@ -174,7 +266,7 @@ contract JoinTest is Test {
         ERC20(cbBTC).approve(address(engine), a1);
         engine.join(strategyId, address(strategy), amounts);
 
-        deal(USDC, address(strategy), 1e6);
+        deal(USDC, address(strategy), 1);
 
         engine.exit(strategyId, address(strategy));
 
