@@ -38,9 +38,11 @@ The protocol consists of several key components:
 ## Roadmap (not in order):
 
  - [x] Single step strategies
- - [ ] Multi-step strategy curation
+ - [x] Multi-step strategy curation
  - [ ] Yield and rewards calculation
  - [ ] Onchain risk analysis
+ - [ ] Simulating strategy before creation
+ - [ ] Making some of the contracts upgradeable
 
 ## Get started
 
