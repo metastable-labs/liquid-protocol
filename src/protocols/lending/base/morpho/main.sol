@@ -102,6 +102,9 @@ contract MorphConnector is BaseConnector, Constants, MorphEvents {
         // transfer token from Strategy Module
         require(strategyModule.transferToken(assetIn, amountToDeposit), "Not enough token");
 
+        // verify asset out before approving
+        require(engine.verifyAssetOut(assetOut), "incorrect spender");
+
         // approve and deposit asset
         ERC20(assetIn).approve(assetOut, amountToDeposit);
 

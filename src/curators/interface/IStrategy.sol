@@ -66,6 +66,8 @@ interface ILiquidStrategy is IConnector {
 
     function transferToken(address _token, uint256 _amount) external returns (bool);
 
+    function transferToken(address _user, address _token, uint256 _amount) external returns (bool);
+
     /**
      * @dev set value to true if a user joins a strategy, else, false
      * @param _strategyId  strategy identity
@@ -114,6 +116,32 @@ interface ILiquidStrategy is IConnector {
         uint256 _amount,
         uint256 _indicator
     ) external;
+
+    /**
+     * @dev Update user token balance
+     * @param _strategyId unique identifier of the strategy.
+     * @param _user address of the user whose balance is being updated.
+     * @param _token address of the token.
+     * @param _amount the amount of token to add or sub.
+     * @param _indicator determines the operation:
+     *                   0 to add,
+     *                   any other value to sub.
+     */
+    function updateUserTokenBalanceEngine(
+        bytes32 _strategyId,
+        address _user,
+        address _token,
+        uint256 _amount,
+        uint256 _indicator
+    ) external;
+
+    /**
+     * @dev Delete user strategy position
+     * @param _strategyId unique identifier of the strategy to update.
+     * @param _user address of the user whose strategy is being updated.
+     * @param _assets address of the user whose strategy is being updated.
+     */
+    function deleteUserPosition(bytes32 _strategyId, address _user, address[] memory _assets) external;
 
     /**
      * @dev Get strategy by strategy id

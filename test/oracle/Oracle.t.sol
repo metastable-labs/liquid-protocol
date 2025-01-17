@@ -25,4 +25,17 @@ contract OracleTest is Test, Constants {
 
         console.logUint(z); // scaled to 18 decimals
     }
+
+    function test_Price_in_USD() public {
+        uint256 p = oracle.getPriceInUSD(20 * 1e18, ETH);
+        // uint256 y = uint256(oracle.getLatestAnswer(SEQUENCER_UPTIME_FEED, ETH_USD));
+
+        // console.logUint(x);
+        // console.logUint(y);
+
+        // price of 1 x in terms of y
+        // uint256 z = oracle.getTokenAPriceInTokenB(x, 8, y, 8);
+
+        console.logUint(p); // scaled to 8 decimals
+    }
 }
