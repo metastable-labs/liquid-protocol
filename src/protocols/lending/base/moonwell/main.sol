@@ -13,7 +13,9 @@ import "./interface.sol";
 import "./events.sol";
 
 contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
-    /* ========== STATE VARIABLES ========== */
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     STATE VARIABLES                        */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Oracle contract fetches the price of different tokens
     ILiquidStrategy public immutable strategyModule;
@@ -24,13 +26,21 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
     /// @notice Oracle contract fetches the price of different tokens
     IOracle public immutable oracle;
 
-    /* ========== ERRORS ========== */
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                           ERROR                            */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Thrown when execution fails with a specific reason
+    /// @dev Thrown when execution fails with a specific reason
     error ExecutionFailed(string reason);
 
-    /// @notice Thrown when an invalid action type is provided
+    /// @dev Thrown when an invalid action type is provided
     error InvalidAction();
+
+    /// @dev The function caller is not the engine.
+    error CallerNotEngine();
+
+    /// @dev Thrown when a transfer failed.
+    error TransferFailed();
 
     /// @notice Initializes the MoonwellConnector
     /// @param name Name of the Connector
@@ -43,10 +53,18 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         oracle = IOracle(_oracle);
     }
 
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                       MODIFIERS                            */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
     modifier onlyEngine() {
-        require(msg.sender == address(engine), "caller is not the execution engine");
+        if (msg.sender != address(engine)) revert CallerNotEngine();
         _;
     }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    ONLY ENGINE FUNCTIONS                   */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     // TODO: only the execution engine should be able to call this execute method
     // TODO: add methods for fee withdrawal and unstaking
@@ -95,6 +113,10 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         return ERC20(_token).transfer(_user, tokenBalance);
     }
 
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     INTERNAL FUNCTIONS                     */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
     function _mintToken(address assetIn, address assetOut, bytes32 strategyId, address userAddress, uint256 amountRatio)
         internal
         returns (address, address[] memory, uint256[] memory, address, uint256, address[] memory, uint256[] memory)
@@ -112,7 +134,7 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         uint256 shareAmountBefore = ERC20(assetOut).balanceOf(address(this));
 
         // verify asset out before approving
-        require(_verifyAssetOut(assetOut), "incorrect spender");
+        require(engine.verifyAssetOut(assetOut), "incorrect spender");
 
         // approve and supply asset
         ERC20(assetIn).approve(assetOut, amountToDeposit);
@@ -220,7 +242,7 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         require(strategyModule.transferToken(assetsIn[0], btBalance), "not enough borrowed token");
 
         // verify spender
-        require(_verifyAssetOut(assetsIn[2]), "incorrect spender");
+        require(engine.verifyAssetOut(assetsIn[2]), "incorrect spender");
 
         // repay
         ERC20(assetsIn[0]).approve(assetsIn[2], btBalance);
@@ -312,13 +334,6 @@ contract MoonwellConnector is BaseConnector, Constants, MoonwellEvents {
         if (_tokenB == USDC) _tokenBPriceInUsd = oracle.getLatestAnswer(SEQUENCER_UPTIME_FEED, USDC_USD);
 
         return (_tokenAPriceInUsd, _tokenBPriceInUsd);
-    }
-
-    function _verifyAssetOut(address _assetOut) internal returns (bool) {
-        return (
-            (_assetOut == MOONWELL_USDC) || (_assetOut == MOONWELL_CBBTC) || (_assetOut == MOONWELL_WETH)
-                || (_assetOut == MOONWELL_DAI) || (_assetOut == MOONWELL_EURC)
-        );
     }
 
     receive() external payable {

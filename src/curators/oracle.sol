@@ -1,11 +1,49 @@
 // SPDX-License-Identifier: GNU
 pragma solidity ^0.8.20;
 
-import "./interface/IOracle.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract Oracle {
+import "./interface/IOracle.sol";
+import "../protocols/common/constant.sol";
+
+contract Oracle is Constants {
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                       CUSTOM ERRORS                        */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @dev The Chainlink sequencer is down.
     error SequencerDown();
+
+    /// @dev The grace period has NOT passed after the sequencer is back up.
     error GracePeriodNotOver();
+
+    /// @dev The datafeed is address zero.
+    error InvalidDataFeed();
+
+    /// @dev The price of a token in USD is zero.
+    error InvalidPriceInUsd();
+
+    /**
+     * @notice function to get the price of token in USD
+     * @param _amount token amount to calculate in USD
+     * @param _token the addreas of the token
+     */
+    function getPriceInUSD(uint256 _amount, address _token) public view returns (uint256) {
+        address _dataFeed;
+
+        if (_token == CBBTC) _dataFeed = CBBTC_USD;
+        if (_token == ETH) _dataFeed = ETH_USD;
+        if (_token == USDC) _dataFeed = USDC_USD;
+        if (_token == DAI) _dataFeed = DAI_USD;
+
+        if (_dataFeed == address(0)) revert InvalidDataFeed();
+
+        int256 priceInUSD = getLatestAnswer(SEQUENCER_UPTIME_FEED, _dataFeed);
+
+        if (priceInUSD <= int256(0)) revert InvalidPriceInUsd();
+
+        return (uint256(priceInUSD) * _amount) / 10 ** ERC20(_token).decimals(); // returns usd value scaled to 8 decimal
+    }
 
     /**
      * @notice function to get the price of token in USD

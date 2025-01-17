@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: GNU
 pragma solidity ^0.8.20;
 
-import "./interface/IStrategy.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {ERC4626, ERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 
-contract Engine is ERC4626 {
+import "./interface/IStrategy.sol";
+
+contract Engine is ERC4626, Ownable2Step {
+    // assetOut => true/false
+    mapping(address => bool) public verifyAssetOut;
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                          EVENTS                            */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -29,9 +34,26 @@ contract Engine is ERC4626 {
     /*                           ERROR                            */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    /// @dev A step execution fails.
+    error ExecuteStepFailed(string reason);
+
+    /// @dev The action type is invalid.
     error InvalidActionType();
 
-    constructor() ERC4626(IERC20(address(this))) ERC20("LIQUID", "LLP") {}
+    constructor() ERC4626(IERC20(address(this))) Ownable(msg.sender) ERC20("LIQUID", "LLP") {}
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     ONLY OWNER FUNCTIONS                   */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Withdraw user asset
+    function toggleAssetOut(address _assetOut) external onlyOwner {
+        verifyAssetOut[_assetOut] = !verifyAssetOut[_assetOut];
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                       PUBLIC FUNCTIONS                     */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function join(bytes32 _strategyId, address _strategyModule, uint256[] memory _amounts) public {
         // Fetch the strategy
@@ -39,9 +61,19 @@ contract Engine is ERC4626 {
 
         // Validate strategy - not necessary single we validate the steps before strategy creation
 
-        // Transfer initial deposit(s) from caller
+        // AssetsIn
+
         uint256 initialAssetsInLength = strategy.steps[0].assetsIn.length;
 
+        uint256[] memory assetsInBalBefore = new uint256[](initialAssetsInLength);
+
+        for (uint256 i; i < initialAssetsInLength; i++) {
+            address asset = strategy.steps[0].assetsIn[i];
+
+            assetsInBalBefore[i] = IERC20(asset).balanceOf(_strategyModule);
+        }
+
+        // Transfer initial deposit(s) from caller
         for (uint256 i; i < initialAssetsInLength; i++) {
             address asset = strategy.steps[0].assetsIn[i];
             // approve `this` as spender in client first
@@ -89,9 +121,6 @@ contract Engine is ERC4626 {
                 address[] memory underlyingTokens,
                 uint256[] memory underlyingAmounts
             ) {
-                // Verify result
-                // require(_verifyResult(shareAmount, step.assetOut, _strategyModule), "Invalid shareAmount");
-
                 // update user info
                 ILiquidStrategy(_strategyModule).updateUserStats(
                     _strategyId,
@@ -106,7 +135,23 @@ contract Engine is ERC4626 {
                     i
                 );
             } catch Error(string memory reason) {
-                revert(string(abi.encodePacked("Step ", i, " failed: ", reason)));
+                revert ExecuteStepFailed(string(abi.encodePacked("Step ", i, " failed: ", reason)));
+            }
+        }
+
+        // Return the remaining deposit balance
+        for (uint256 i; i < initialAssetsInLength; i++) {
+            address asset = strategy.steps[0].assetsIn[i];
+
+            uint256 remainingDeposit = IERC20(asset).balanceOf(_strategyModule) - assetsInBalBefore[i];
+
+            if (remainingDeposit > 0) {
+                ILiquidStrategy(_strategyModule).updateUserTokenBalanceEngine(
+                    _strategyId, msg.sender, asset, remainingDeposit, 1
+                );
+                _amounts[i] -= remainingDeposit;
+
+                ILiquidStrategy(_strategyModule).transferToken(msg.sender, asset, remainingDeposit);
             }
         }
 
@@ -129,7 +174,7 @@ contract Engine is ERC4626 {
     }
 
     function exit(bytes32 _strategyId, address _strategyModule) public {
-        // check and burn user's liquid share token (also prevent re-enterancy)
+        // check and burn user's liquid share token
 
         // Fetch the strategy
         ILiquidStrategy.Step[] memory steps = ILiquidStrategy(_strategyModule).getStrategy(_strategyId).steps;
@@ -168,7 +213,7 @@ contract Engine is ERC4626 {
             try IConnector(step.connector).execute(
                 actionType, assetsIn, assetOut, i - 1, 0, _strategyId, msg.sender, step.data
             ) returns (
-                address,
+                address protocol,
                 address[] memory,
                 uint256[] memory,
                 address assetOut,
@@ -180,26 +225,28 @@ contract Engine is ERC4626 {
 
                 // Transfer token to user
                 if (i == 1) {
+                    ILiquidStrategy.ShareBalance memory userShareBalance = ILiquidStrategy(_strategyModule)
+                        .getUserShareBalance(_strategyId, msg.sender, protocol, step.assetOut, 0);
+
+                    // zero free for now
+                    uint256 _fee = 0;
+
+                    // update strategy stats
+                    ILiquidStrategy(_strategyModule).updateStrategyStats(
+                        _strategyId, step.assetsIn, userShareBalance.underlyingAmounts, msg.sender, _fee, 1
+                    );
+
                     // todo: get all the assetout then send
                     for (uint256 j; j < step.assetsIn.length; j++) {
                         IConnector(step.connector).withdrawAsset(_strategyId, msg.sender, step.assetsIn[j]);
                     }
+
+                    ILiquidStrategy(_strategyModule).deleteUserPosition(_strategyId, msg.sender, step.assetsIn);
                 }
             } catch Error(string memory reason) {
-                revert(string(abi.encodePacked("Step ", i - 1, " failed: ", reason)));
+                revert ExecuteStepFailed(string(abi.encodePacked("Step ", i, " failed: ", reason)));
             }
         }
-
-        ILiquidStrategy.AssetBalance memory userAssetBalance =
-            ILiquidStrategy(_strategyModule).getUserAssetBalance(_strategyId, msg.sender, steps[0].assetsIn, 0);
-
-        // zero free for now
-        uint256 _fee = 0;
-
-        // update strategy stats
-        ILiquidStrategy(_strategyModule).updateStrategyStats(
-            _strategyId, steps[0].assetsIn, userAssetBalance.amounts, msg.sender, _fee, 1
-        );
 
         // update user strategy stats
         ILiquidStrategy(_strategyModule).updateUserStrategy(_strategyId, msg.sender, 1);
@@ -209,13 +256,5 @@ contract Engine is ERC4626 {
 
         // Emits Exit event
         emit Exit(_strategyId, msg.sender);
-    }
-
-    function _verifyResult(uint256 _shareAmount, address _assetOut, address _strategyModule)
-        internal
-        view
-        returns (bool)
-    {
-        return ERC4626(_assetOut).balanceOf(_strategyModule) == _shareAmount;
     }
 }

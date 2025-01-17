@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
-
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import "./interface/IStrategy.sol";
 import "./interface/IEngine.sol";
 
@@ -67,9 +67,29 @@ contract Strategy is Ownable2Step {
     /*                           ERROR                            */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    /// @dev The Strategy does not exist.
     error StrategyNotFound(bytes32 strategyId);
+
+    /// @dev The Strategy already exist.
     error StrategyAlreadyExists(bytes32 strategyId);
-    error Unauthorized(address caller);
+
+    /// @dev The function caller is not a connector.
+    error CallerNotConnector();
+
+    /// @dev The function caller is not the engine.
+    error CallerNotEngine();
+
+    /// @dev The strategy steps are not valid.
+    error InvalidSteps();
+
+    /// @dev The address is a zero address.
+    error ZeroAddress();
+
+    /// @dev The amount ratio is invalid.
+    error InvalidAmountRatio();
+
+    /// @dev The action type is invalid.
+    error InvalidActionType();
 
     constructor(address _engine) Ownable(msg.sender) {
         engine = IEngine(_engine);
@@ -80,12 +100,12 @@ contract Strategy is Ownable2Step {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     modifier onlyConnector() {
-        require(approveConnector[msg.sender], "caller is not a connector");
+        if (!approveConnector[msg.sender]) revert CallerNotConnector();
         _;
     }
 
     modifier onlyEngine() {
-        require(msg.sender == address(engine), "caller is not the execution engine");
+        if (msg.sender != address(engine)) revert CallerNotEngine();
         _;
     }
 
@@ -107,6 +127,7 @@ contract Strategy is Ownable2Step {
         uint256 _minDeposit
     ) public {
         bytes32 strategyId = keccak256(abi.encodePacked(msg.sender, _name, _strategyDescription));
+
         // Check if strategy already exists
         if (strategies[strategyId].curator != address(0)) {
             revert StrategyAlreadyExists(strategyId);
@@ -122,7 +143,7 @@ contract Strategy is Ownable2Step {
         });
 
         // Validate curator's strategy steps
-        require(_validateSteps(_steps), "Invalid steps");
+        if (!_validateSteps(_steps)) revert InvalidSteps();
 
         // Store strategy in all relevant mappings
         strategies[strategyId] = _strategy;
@@ -142,6 +163,12 @@ contract Strategy is Ownable2Step {
         // check if amount equals or more than available balance first
         // only connectors can call
         return IERC20(_token).transfer(msg.sender, _amount);
+    }
+
+    function transferToken(address _user, address _token, uint256 _amount) public onlyEngine returns (bool) {
+        // check if amount equals or more than available balance first
+        // only connectors can call
+        return IERC20(_token).transfer(_user, _amount);
     }
 
     /**
@@ -300,6 +327,44 @@ contract Strategy is Ownable2Step {
     }
 
     /**
+     * @dev Update user token balance
+     * @param _strategyId unique identifier of the strategy.
+     * @param _user address of the user whose balance is being updated.
+     * @param _token address of the token.
+     * @param _amount the amount of token to add or sub.
+     * @param _indicator determines the operation:
+     *                   0 to add,
+     *                   any other value to sub.
+     */
+    function updateUserTokenBalanceEngine(
+        bytes32 _strategyId,
+        address _user,
+        address _token,
+        uint256 _amount,
+        uint256 _indicator
+    ) public onlyEngine {
+        if (_indicator == 0) {
+            userTokenBalance[_strategyId][_user][_token] += _amount;
+        } else {
+            userTokenBalance[_strategyId][_user][_token] -= _amount;
+        }
+    }
+
+    /**
+     * @dev Delete user strategy position
+     * @param _strategyId unique identifier of the strategy to update.
+     * @param _user address of the user whose strategy is being updated.
+     * @param _assets address of the user whose strategy is being updated.
+     */
+    function deleteUserPosition(bytes32 _strategyId, address _user, address[] memory _assets) public onlyEngine {
+        for (uint256 i; i < _assets.length; i++) {
+            userTokenBalance[_strategyId][_user][_assets[i]] = 0;
+        }
+
+        delete userStats[_strategyId][_user];
+    }
+
+    /**
      * @dev Toggles the approval status of a connector. If the connector is currently approved,
      * it will be revoked, and vice versa.
      * @param _connector The address of the connector to toggle.
@@ -413,7 +478,8 @@ contract Strategy is Ownable2Step {
             uint256 stepIndex = _stepIndex == type(uint256).max ? i : _stepIndex;
 
             if (
-                keccak256(abi.encode(stats.tokenBalances[i].assets)) == keccak256(abi.encode(_assets)) && i == stepIndex
+                keccak256(abi.encodePacked(stats.tokenBalances[i].assets)) == keccak256(abi.encodePacked(_assets))
+                    && i == stepIndex
             ) {
                 return stats.tokenBalances[i];
             }
@@ -472,25 +538,25 @@ contract Strategy is Ownable2Step {
     function _validateSteps(ILiquidStrategy.Step[] memory steps) internal view returns (bool) {
         for (uint256 i = 0; i < steps.length; i++) {
             // Validate connector address
-            require(steps[i].connector != address(0), "Invalid connector address");
+            if (steps[i].connector == address(0)) revert ZeroAddress();
 
             // Validate assets
             for (uint256 j; j < steps[i].assetsIn.length; j++) {
-                require(steps[i].assetsIn[j] != address(0), "Invalid input asset");
+                if (steps[i].assetsIn[j] == address(0)) revert ZeroAddress();
             }
             if (steps[i].actionType != IConnector.ActionType.SUPPLY) {
-                require(steps[i].assetOut != address(0), "Invalid output asset");
+                if (steps[i].assetOut == address(0)) revert ZeroAddress();
             }
 
             // Validate amount ratio
-            require(steps[i].amountRatio > 0 && steps[i].amountRatio <= 10_000, "Invalid amount ratio"); // Max 100%
+            if (steps[i].amountRatio == 0 || steps[i].amountRatio > 10_000) revert InvalidAmountRatio();
 
             // Validate connector supports action
             IConnector connector = IConnector(steps[i].connector);
-            require(
-                _isValidActionForConnector(connector.getConnectorType(), steps[i].actionType),
-                "Invalid action for connector type"
-            );
+
+            if (!_isValidActionForConnector(connector.getConnectorType(), steps[i].actionType)) {
+                revert InvalidActionType();
+            }
         }
 
         return true;
